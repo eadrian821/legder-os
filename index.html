@@ -353,7 +353,7 @@ const S = {
 let sb=null;
 function initSb(){
   if(!CFG.URL||!CFG.ANON) return null;
-  sb=createClient(CFG.URL,CFG.ANON,{auth:{persistSession:true,autoRefreshToken:true,flowType:'implicit'}});; return sb;
+  sb=createClient(CFG.URL,CFG.ANON,{auth:{persistSession:true,autoRefreshToken:true}}); return sb;
 }
 initSb();
 

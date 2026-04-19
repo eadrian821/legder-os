@@ -1,0 +1,1214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
+<meta name="theme-color" content="#0a0a0a" />
+<title>Ledger OS</title>
+<link rel="manifest" href="./manifest.webmanifest" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#07070f;--bg-1:#0d0d18;--bg-2:#121220;--bg-3:#181828;
+  --line:#1c1c30;--line-2:#252540;
+  --ink:#ddddf0;--ink-2:#9999b8;--ink-3:#666688;--ink-4:#3a3a58;
+  --accent:#00e676;--accent-ink:#07070f;
+  --invest:#00e676;--protect:#4488ff;--sustain:#ffaa00;--leak:#ff3355;
+  --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+  --sans:'Geist',ui-sans-serif,system-ui,sans-serif;
+  --serif:'Instrument Serif',Georgia,serif;
+}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes countUp{from{opacity:0;transform:scale(.88)}to{opacity:1;transform:scale(1)}}
+@keyframes pulseGlow{0%,100%{opacity:.7}50%{opacity:1}}
+@keyframes barGrow{from{width:0}to{width:var(--w,100%)}}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overscroll-behavior-y:none}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;
+  line-height:1.45;-webkit-font-smoothing:antialiased;
+  padding-bottom:env(safe-area-inset-bottom);padding-top:env(safe-area-inset-top)}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input,select,textarea{font:inherit;color:inherit;background:none;border:0;outline:0}
+input::placeholder,textarea::placeholder{color:var(--ink-4)}
+select option{background:var(--bg-2);color:var(--ink)}
+.mono{font-family:var(--mono)}.serif{font-family:var(--serif);font-style:italic}
+.caps{text-transform:uppercase;letter-spacing:.08em;font-size:10px;font-weight:500;color:var(--ink-3)}
+/* SHELL */
+#app{min-height:100vh;display:flex;flex-direction:column}
+.topbar{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:12px;
+  padding:14px 18px;background:rgba(10,10,10,.9);
+  backdrop-filter:saturate(140%) blur(10px);-webkit-backdrop-filter:saturate(140%) blur(10px);
+  border-bottom:1px solid var(--line)}
+.brand{font-family:var(--mono);font-weight:800;letter-spacing:-.03em;font-size:14px;
+  display:flex;align-items:center;gap:8px}
+.brand .dot{width:8px;height:8px;background:var(--accent);border-radius:2px;
+  animation:pulseGlow 2s ease-in-out infinite;box-shadow:0 0 8px var(--accent)}
+.brand .os{color:var(--ink-3);font-weight:400}
+.topbar .status{margin-left:auto;display:flex;align-items:center;gap:12px;
+  font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+.pulse{width:7px;height:7px;border-radius:50%;background:var(--invest);
+  box-shadow:0 0 8px var(--invest);animation:pulseGlow 2s ease-in-out infinite}
+.pulse.off{background:var(--leak);box-shadow:0 0 8px var(--leak);animation:none}
+.qbadge{background:var(--sustain);color:#000;border-radius:3px;padding:2px 7px;
+  font-family:var(--mono);font-size:9px;font-weight:800;letter-spacing:.06em}
+.mask-btn{background:none;border:1px solid var(--line-2);border-radius:4px;
+  padding:3px 9px;font-family:var(--mono);font-size:10px;color:var(--ink-3);
+  cursor:pointer;letter-spacing:.06em;transition:all .15s}
+.mask-btn:hover{border-color:var(--accent);color:var(--accent)}
+main{flex:1;padding:18px 18px 120px;max-width:1440px;margin:0 auto;width:100%}
+/* BOTTOM NAV */
+.bottomnav{position:fixed;bottom:0;left:0;right:0;display:grid;grid-template-columns:repeat(6,1fr);
+  background:rgba(7,7,15,.97);backdrop-filter:blur(16px);
+  border-top:1px solid var(--line);padding:8px 0 calc(8px + env(safe-area-inset-bottom));z-index:30}
+.bottomnav button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 0;
+  color:var(--ink-4);font-size:9px;letter-spacing:.1em;text-transform:uppercase;
+  position:relative;transition:color .15s}
+.bottomnav button.active{color:var(--accent)}
+.bottomnav button.active::after{content:'';position:absolute;top:0;left:25%;right:25%;
+  height:2px;background:var(--accent);border-radius:0 0 2px 2px;box-shadow:0 0 8px var(--accent)}
+.bottomnav button .bicon{font-family:var(--mono);font-weight:700;font-size:14px}
+/* FAB */
+.fab{position:fixed;right:18px;bottom:calc(76px + env(safe-area-inset-bottom));
+  width:58px;height:58px;border-radius:50%;background:var(--accent);color:var(--accent-ink);
+  font-family:var(--mono);font-weight:800;font-size:26px;display:grid;place-items:center;
+  box-shadow:0 8px 24px rgba(212,255,0,.25),0 0 0 1px rgba(255,255,255,.04);
+  z-index:35;transition:transform .12s ease}
+.fab:active{transform:scale(.94)}
+/* SECTION HEAD */
+.sh{display:flex;align-items:baseline;justify-content:space-between;margin:24px 2px 10px}
+.sh .t{font-family:var(--mono);font-weight:600;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.sh .m{font-family:var(--mono);font-size:11px;color:var(--ink-4)}
+.sh button{font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:.08em}
+/* CARD */
+.card{background:var(--bg-1);border:1px solid var(--line);border-radius:4px}
+.card+.card{margin-top:10px}
+/* HERO */
+.hero{position:relative;padding:24px 20px 20px;background:var(--bg-1);
+  border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.hero::before{content:'';position:absolute;inset:0;
+  background:repeating-linear-gradient(90deg,transparent 0 39px,rgba(255,255,255,.012) 39px 40px),
+    radial-gradient(800px 180px at 100% -20%,rgba(0,230,118,.07),transparent 60%),
+    radial-gradient(400px 300px at 0% 100%,rgba(68,136,255,.04),transparent 60%);
+  pointer-events:none}
+.hero .r1{display:flex;align-items:center;justify-content:space-between}
+.hero .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3)}
+.hero .ts{font-family:var(--mono);font-size:10px;color:var(--ink-4)}
+.hero .nw{font-family:var(--mono);font-weight:800;font-size:46px;letter-spacing:-.04em;margin-top:8px;line-height:1;
+  animation:countUp .5s cubic-bezier(.22,1,.36,1)}
+.hero .nw .cur{color:var(--accent);font-size:13px;font-weight:600;margin-right:6px;vertical-align:middle}
+.hero .nw.masked{letter-spacing:.15em;color:var(--ink-3);font-size:32px}
+.hero .delta{margin-top:8px;font-family:var(--mono);font-size:12px;color:var(--ink-3)}
+.delta .up{color:var(--invest)}.delta .dn{color:var(--leak)}
+/* AXIS BAR */
+.axbar{margin-top:18px;display:flex;gap:2px;height:8px;border-radius:2px;overflow:hidden;background:var(--bg-2)}
+.axbar span{min-width:0;transition:flex-basis .3s}
+.axleg{margin-top:10px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px;
+  font-family:var(--mono);font-size:10px}
+.axleg div{display:flex;align-items:center;gap:6px;color:var(--ink-3)}
+.axleg .sw{width:8px;height:8px;border-radius:1px;flex-shrink:0}
+.axleg .pct{color:var(--ink);margin-left:auto}
+/* KPI */
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+.kpi{padding:14px 12px;background:var(--bg-1);border:1px solid var(--line);border-radius:6px;
+  position:relative;overflow:hidden;animation:fadeUp .3s ease both;transition:border-color .2s}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--accent-line,var(--line-2)),transparent);opacity:.6}
+.kpi:hover{border-color:var(--line-2)}
+.kpi .l{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.kpi .v{font-family:var(--mono);font-weight:700;font-size:22px;margin-top:8px;letter-spacing:-.03em;
+  animation:countUp .4s cubic-bezier(.22,1,.36,1) both}
+.kpi .sub{font-family:var(--mono);font-size:9px;color:var(--ink-4);margin-top:3px}
+.kpi.masked .v{letter-spacing:.2em;color:var(--ink-4)}
+/* TX ROW */
+.txgl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-4);margin:16px 2px 6px}
+.tx{display:grid;grid-template-columns:3px 1fr auto 24px;gap:12px;align-items:center;
+  padding:11px 12px;background:var(--bg-1);border:1px solid var(--line);border-radius:6px;
+  margin-bottom:5px;cursor:pointer;transition:background .12s,border-color .12s;
+  animation:fadeUp .25s ease both}
+.tx:hover{background:var(--bg-2);border-color:var(--line-2)}
+.tx:active{background:var(--bg-3)}
+.tx .stripe{width:3px;border-radius:2px;align-self:stretch;min-height:28px}
+.tx .mid{min-width:0}
+.tx .cat{font-weight:500;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tx .meta{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-top:2px}
+.tx .right{text-align:right}
+.tx .amt{font-family:var(--mono);font-weight:600;font-size:14px;letter-spacing:-.01em}
+.tx .amt .cur{color:var(--ink-3);font-weight:500;font-size:10px;margin-right:3px}
+.tx .time{font-family:var(--mono);font-size:10px;color:var(--ink-4);margin-top:2px}
+.tx[data-d="in"] .amt{color:var(--invest)}
+.tx[data-d="pending"] .amt{color:var(--ink-4)}
+.tx .edit-hint{color:var(--ink-4);font-size:12px;opacity:0;transition:opacity .15s}
+.tx:hover .edit-hint{opacity:1}
+/* EMPTY */
+.empty{padding:40px 20px;text-align:center}
+.empty .big{font-family:var(--serif);font-size:22px;color:var(--ink-2)}
+.empty .sm{font-family:var(--mono);font-size:11px;margin-top:8px;color:var(--ink-4)}
+/* SHEETS */
+.sb{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);
+  z-index:50;opacity:0;pointer-events:none;transition:opacity .2s}
+.sb.open{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;background:var(--bg-1);
+  border-top:1px solid var(--line-2);border-radius:16px 16px 0 0;z-index:51;
+  transform:translateY(100%);transition:transform .3s cubic-bezier(.2,.9,.2,1);
+  max-height:93vh;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom);
+  box-shadow:0 -8px 40px rgba(0,0,0,.6)}
+.sheet.open{transform:translateY(0)}
+.sheet .grab{width:36px;height:3px;border-radius:2px;background:var(--line-2);margin:12px auto 0}
+.sheet header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px 10px;
+  border-bottom:1px solid var(--line)}
+.sheet h2{font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--accent);font-weight:700}
+.sheet .x{width:30px;height:30px;border-radius:8px;background:var(--bg-2);border:1px solid var(--line-2);
+  display:grid;place-items:center;color:var(--ink-3);font-size:16px;transition:all .15s}
+.sheet .x:hover{border-color:var(--leak);color:var(--leak)}
+.sheet .body{overflow-y:auto;padding:12px 18px 24px}
+/* FORM */
+.seg{display:grid;grid-template-columns:repeat(3,1fr);background:var(--bg-2);
+  border:1px solid var(--line);border-radius:6px;padding:4px;margin-bottom:16px;gap:3px}
+.seg button{padding:10px 0;font-family:var(--mono);font-size:11px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-3);border-radius:4px;transition:all .15s;font-weight:600}
+.seg button.active{background:var(--bg);color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.amtwrap{display:flex;align-items:baseline;gap:10px;padding:20px 16px;margin-bottom:16px;
+  background:var(--bg-2);border:1px solid var(--line-2);border-radius:8px;
+  box-shadow:0 0 0 1px rgba(0,230,118,.06) inset}
+.amtwrap .cur{font-family:var(--mono);font-size:14px;color:var(--accent);font-weight:600}
+.amtwrap input{flex:1;font-family:var(--mono);font-weight:800;font-size:38px;letter-spacing:-.04em;text-align:right;color:var(--ink)}
+.field{margin-bottom:14px}
+.field .l{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--ink-3);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.chips{display:flex;flex-wrap:wrap;gap:5px;max-height:120px;overflow-y:auto}
+.chips::-webkit-scrollbar{width:3px}.chips::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:2px}
+.chip{padding:6px 11px;font-family:var(--mono);font-size:11px;background:var(--bg-2);
+  border:1px solid var(--line);border-radius:4px;color:var(--ink-2);transition:all .12s;white-space:nowrap}
+.chip:active{transform:scale(.96)}
+.chip.active{background:color-mix(in srgb,var(--accent) 15%,var(--bg-2));color:var(--accent);border-color:var(--accent)}
+.cat-search{width:100%;padding:8px 10px;background:var(--bg-2);border:1px solid var(--line);
+  border-radius:5px;font-family:var(--mono);font-size:12px;color:var(--ink);margin-bottom:8px}
+.cat-search:focus{border-color:var(--accent);outline:none}
+.axgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.axbtn{padding:12px 4px;text-align:center;border-radius:6px;background:var(--bg-2);
+  border:1px solid var(--line);transition:all .15s;cursor:pointer}
+.axbtn:hover{border-color:var(--line-2)}
+.axbtn .n{font-family:var(--mono);font-size:10px;font-weight:800;letter-spacing:.06em}
+.axbtn .d{font-family:var(--mono);font-size:9px;color:var(--ink-4);margin-top:3px}
+.axbtn[data-a="INVEST"]{color:var(--invest)}.axbtn[data-a="PROTECT"]{color:var(--protect)}
+.axbtn[data-a="SUSTAIN"]{color:var(--sustain)}.axbtn[data-a="LEAK"]{color:var(--leak)}
+.axbtn.active[data-a="INVEST"]{background:color-mix(in srgb,var(--invest) 16%,var(--bg-2));border-color:var(--invest);box-shadow:0 0 12px color-mix(in srgb,var(--invest) 25%,transparent)}
+.axbtn.active[data-a="PROTECT"]{background:color-mix(in srgb,var(--protect) 16%,var(--bg-2));border-color:var(--protect);box-shadow:0 0 12px color-mix(in srgb,var(--protect) 25%,transparent)}
+.axbtn.active[data-a="SUSTAIN"]{background:color-mix(in srgb,var(--sustain) 16%,var(--bg-2));border-color:var(--sustain);box-shadow:0 0 12px color-mix(in srgb,var(--sustain) 25%,transparent)}
+.axbtn.active[data-a="LEAK"]{background:color-mix(in srgb,var(--leak) 16%,var(--bg-2));border-color:var(--leak);box-shadow:0 0 12px color-mix(in srgb,var(--leak) 25%,transparent)}
+.ibox{padding:10px 12px;background:var(--bg-2);border:1px solid var(--line);border-radius:6px;
+  font-family:var(--mono);font-size:13px;width:100%;color:var(--ink)}
+.ibox:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 15%,transparent)}
+.sel{padding:10px 12px;background:var(--bg-2);border:1px solid var(--line);border-radius:6px;
+  font-family:var(--mono);font-size:13px;width:100%;appearance:none;color:var(--ink);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath fill='%23666688' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center}
+.submit{width:100%;padding:15px;margin-top:8px;background:var(--accent);color:var(--accent-ink);
+  font-family:var(--mono);font-size:13px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+  border-radius:6px;transition:all .15s;box-shadow:0 0 20px color-mix(in srgb,var(--accent) 30%,transparent)}
+.submit:hover{box-shadow:0 0 28px color-mix(in srgb,var(--accent) 45%,transparent);transform:translateY(-1px)}
+.submit:active{transform:scale(.98) translateY(0)}.submit:disabled{background:var(--bg-3);color:var(--ink-4);box-shadow:none}
+.btn-g{padding:9px 16px;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+  border:1px solid var(--line-2);border-radius:6px;color:var(--ink-3);transition:all .15s;font-weight:600}
+.btn-g:hover{border-color:var(--accent);color:var(--accent);box-shadow:0 0 10px color-mix(in srgb,var(--accent) 15%,transparent)}
+.btn-d{color:var(--leak)!important;border-color:var(--leak)!important}
+.btn-d:hover{box-shadow:0 0 10px color-mix(in srgb,var(--leak) 20%,transparent)!important}
+.delete-btn{width:100%;padding:13px;margin-top:6px;background:transparent;
+  color:var(--leak);font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.1em;
+  text-transform:uppercase;border:1px solid var(--leak);border-radius:6px;transition:all .15s}
+.delete-btn:hover{background:color-mix(in srgb,var(--leak) 12%,transparent)}
+/* WEEK CHART */
+.wbars{display:flex;align-items:flex-end;gap:4px;height:80px;margin:14px 0 4px}
+.wbw{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px}
+.wbc{width:100%;display:flex;flex-direction:column-reverse;gap:1px;flex:1}
+.wbs{width:100%;border-radius:1px;min-height:1px}
+.wbd{font-family:var(--mono);font-size:9px;color:var(--ink-4);text-align:center;margin-top:4px}
+.wbd.today{color:var(--accent);font-weight:700}
+.wba{font-family:var(--mono);font-size:9px;color:var(--ink-3);text-align:center}
+/* BUDGET */
+.brow{padding:14px 16px;border-bottom:1px solid var(--line)}
+.brow:last-child{border-bottom:0}
+.brow-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.brow-n{font-weight:500;font-size:13px}
+.brow-nums{font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+.btrack{height:4px;background:var(--bg-2);border-radius:2px;overflow:hidden}
+.bfill{height:100%;border-radius:2px;transition:width .3s}
+.bfill.over{background:var(--leak)!important}
+/* GOAL */
+.gc{padding:16px;background:var(--bg-1);border:1px solid var(--line);border-radius:4px;margin-bottom:10px}
+.gc-h{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}
+.gc-n{font-weight:600;font-size:15px}
+.gc-pct{font-family:var(--mono);font-weight:700;font-size:22px;color:var(--invest)}
+.gtrack{height:6px;background:var(--bg-2);border-radius:3px;overflow:hidden;margin-bottom:10px}
+.gfill{height:100%;background:var(--invest);border-radius:3px;transition:width .4s}
+.gmeta{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.gs .gl{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-4)}
+.gs .gv{font-family:var(--mono);font-size:13px;font-weight:600;margin-top:3px}
+/* RECURRING */
+.rrow{display:flex;align-items:center;gap:12px;padding:14px 16px;
+  background:var(--bg-1);border:1px solid var(--line);border-radius:4px;margin-bottom:6px}
+.rcad{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-3);background:var(--bg-2);border:1px solid var(--line);border-radius:2px;padding:3px 7px}
+/* ACCOUNT LIST */
+.lrow{display:flex;align-items:center;gap:12px;padding:14px 16px;
+  background:var(--bg-1);border:1px solid var(--line);border-radius:4px;margin-bottom:6px}
+.lrow .sw{width:4px;height:28px;border-radius:1px;flex-shrink:0}
+.lrow .mid{flex:1;min-width:0}
+.lrow .n{font-weight:500;font-size:14px}
+.lrow .m{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-top:2px}
+.lrow .r{text-align:right;flex-shrink:0}
+.lrow .bal{font-family:var(--mono);font-weight:600;font-size:16px}
+.lrow .bal .cur{color:var(--ink-3);font-size:10px;margin-right:4px}
+.lrow .bdate{font-family:var(--mono);font-size:10px;color:var(--ink-4);margin-top:2px}
+/* HEATMAP */
+.heatmap{display:flex;gap:3px;flex-wrap:wrap;margin:8px 0}
+.hm{width:12px;height:12px;border-radius:1px;background:var(--bg-2)}
+/* TOAST */
+.toast{position:fixed;bottom:calc(160px + env(safe-area-inset-bottom));left:50%;transform:translate(-50%,20px);
+  background:var(--bg-3);border:1px solid var(--line-2);color:var(--ink);padding:11px 16px;
+  border-radius:3px;font-family:var(--mono);font-size:12px;opacity:0;pointer-events:none;
+  transition:all .25s;z-index:60;display:flex;align-items:center;gap:12px;white-space:nowrap}
+.toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.toast button{color:var(--accent);font-family:var(--mono);font-weight:600;font-size:12px}
+/* AUTH */
+.auth{min-height:100vh;display:grid;place-items:center;padding:20px}
+.auth-card{max-width:380px;width:100%}
+.auth-card h1{font-family:var(--mono);font-weight:800;letter-spacing:-.04em;font-size:42px;line-height:1}
+.auth-card h1 .os{color:var(--ink-3);font-weight:400}
+.auth-card .tag{font-family:var(--serif);font-size:18px;color:var(--ink-2);margin-top:12px}
+.auth-card .hr{height:1px;background:var(--line);margin:26px 0}
+.auth-card label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-3);display:block;margin-bottom:7px}
+.auth-card .msg{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-top:14px;min-height:16px}
+/* RESPONSIVE */
+@media(min-width:900px){
+  main{padding:24px 32px 80px}
+  .kpis{grid-template-columns:repeat(6,1fr)}
+  .bottomnav{position:sticky;top:0;bottom:auto;grid-template-columns:auto auto auto auto auto auto 1fr;
+    gap:20px;padding:0 24px;border-top:0;border-bottom:1px solid var(--line);background:transparent}
+  .bottomnav button{flex-direction:row;gap:8px;padding:14px 0}
+  .fab{right:32px;bottom:32px;width:64px;height:64px}
+  .hero .nw{font-size:64px}
+}
+/* UTILS */
+.spinner{width:14px;height:14px;border:1.5px solid var(--ink-4);border-top-color:var(--accent);
+  border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:3px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
+
+// ── CONFIG ───────────────────────────────────────────────────
+const CFG = { URL: localStorage.getItem('ledger:url')||'', ANON: localStorage.getItem('ledger:anon')||'' };
+const params = new URLSearchParams(location.search);
+if (params.get('supabase_url') && params.get('supabase_key')) {
+  localStorage.setItem('ledger:url', params.get('supabase_url'));
+  localStorage.setItem('ledger:anon', params.get('supabase_key'));
+  location.replace(location.pathname);
+}
+
+// ── OFFLINE QUEUE (thin IndexedDB) ──────────────────────────
+class Q {
+  constructor(){ this._db=null; this._r=this._open(); }
+  _open(){ return new Promise((res,rej)=>{ const req=indexedDB.open('ledger-q',1);
+    req.onupgradeneeded=e=>{ const db=e.target.result;
+      if(!db.objectStoreNames.contains('p')) db.createObjectStore('p',{keyPath:'lid'}); };
+    req.onsuccess=e=>{this._db=e.target.result;res();}; req.onerror=()=>rej(req.error); }); }
+  async push(tx){ await this._r; return new Promise((res,rej)=>{
+    const t=this._db.transaction('p','readwrite'); t.objectStore('p').put(tx);
+    t.oncomplete=res; t.onerror=()=>rej(t.error); }); }
+  async all(){ await this._r; return new Promise((res,rej)=>{
+    const t=this._db.transaction('p','readonly'); const req=t.objectStore('p').getAll();
+    req.onsuccess=()=>res(req.result); req.onerror=()=>rej(req.error); }); }
+  async del(lid){ await this._r; return new Promise((res,rej)=>{
+    const t=this._db.transaction('p','readwrite'); t.objectStore('p').delete(lid);
+    t.oncomplete=res; t.onerror=()=>rej(t.error); }); }
+  async count(){ return (await this.all()).length; }
+}
+const queue = new Q();
+
+// ── STATE ────────────────────────────────────────────────────
+const S = {
+  session:null, tab:'today',
+  accounts:[], categories:[], budgets:[], goals:[], recurring:[], snapshots:{}, nwHist:[],
+  txToday:[], txWeek:[], txMonth:[], txYear:[],
+  nw:0, axT:{I:0,P:0,Su:0,L:0}, axW:{I:0,P:0,Su:0,L:0}, axM:{I:0,P:0,Su:0,L:0},
+  weekDays:[], monthDays:[],
+  kpis:{ spentD:0, inD:0, spentW:0, spentM:0, leakPct:0, savingsRate:0, runway:null },
+  online:navigator.onLine, qc:0, currency:'KES',
+  masked: localStorage.getItem('ledger:masked')==='1',
+  lu: JSON.parse(localStorage.getItem('ledger:lu')||'{}'),
+};
+
+// ── SUPABASE ─────────────────────────────────────────────────
+let sb=null;
+function initSb(){
+  if(!CFG.URL||!CFG.ANON) return null;
+  sb=createClient(CFG.URL,CFG.ANON,{auth:{persistSession:true,autoRefreshToken:true}}); return sb;
+}
+initSb();
+
+// ── UTILS ────────────────────────────────────────────────────
+const $=(s,r=document)=>r.querySelector(s);
+const el=(t,a={},...k)=>{
+  const n=document.createElement(t);
+  for(const[kk,v] of Object.entries(a)){
+    if(kk==='class') n.className=v;
+    else if(kk==='style'&&typeof v==='object') Object.assign(n.style,v);
+    else if(kk.startsWith('on')&&typeof v==='function') n.addEventListener(kk.slice(2),v);
+    else if(kk==='dataset') Object.assign(n.dataset,v);
+    else if(v!==undefined&&v!==null&&v!==false) n.setAttribute(kk,v===true?'':v);
+  }
+  for(const c of k.flat()){ if(c==null||c===false) continue; n.appendChild(c.nodeType?c:document.createTextNode(String(c))); }
+  return n;
+};
+const fmt=n=>{ if(n==null||isNaN(n)) return '—'; if(S.masked) return '••••';
+  const a=Math.abs(n);
+  const s=a>=1e6?(a/1e6).toFixed(a>=10e6?1:2)+'M':a>=1000?(a/1000).toFixed(a>=10000?1:2)+'k':a.toFixed(0);
+  return (n<0?'-':'')+s; };
+const fmtX=n=>{if(n==null) return '—'; if(S.masked) return '••••••'; return Number(n).toLocaleString('en-US',{maximumFractionDigits:2,minimumFractionDigits:0});};
+const iso=()=>new Date().toISOString();
+const aC=a=>({INVEST:'var(--invest)',PROTECT:'var(--protect)',SUSTAIN:'var(--sustain)',LEAK:'var(--leak)'}[a]||'var(--ink-4)');
+const toAx=(o)=>({INVEST:o.I||0,PROTECT:o.P||0,SUSTAIN:o.Su||0,LEAK:o.L||0});
+
+function todayL(){ const d=new Date(); return new Date(d.getFullYear(),d.getMonth(),d.getDate()); }
+function wkStart(){ const d=todayL(),day=d.getDay(),diff=day===0?-6:1-day; return new Date(d.getFullYear(),d.getMonth(),d.getDate()+diff); }
+function moStart(){ const d=todayL(); return new Date(d.getFullYear(),d.getMonth(),1); }
+function yrStart(){ return new Date(todayL().getFullYear(),0,1); }
+function addD(d,n){ return new Date(d.getTime()+n*864e5); }
+function dISO(d){ return d.toISOString().split('T')[0]; }
+function dayL(d){ return ['Su','Mo','Tu','We','Th','Fr','Sa'][d.getDay()]; }
+
+function toast(msg,action){
+  const ex=$('.toast'); if(ex) ex.remove();
+  const t=el('div',{class:'toast'},msg);
+  if(action){ const b=el('button',{onclick:()=>{action.cb();t.classList.remove('show');setTimeout(()=>t.remove(),260)}},action.label); t.appendChild(b); }
+  document.body.appendChild(t);
+  requestAnimationFrame(()=>t.classList.add('show'));
+  setTimeout(()=>{t.classList.remove('show');setTimeout(()=>t.remove(),260)},action?6000:2400);
+}
+
+// ── DATA ─────────────────────────────────────────────────────
+async function loadAll(){
+  if(!sb||!S.session) return;
+  const uid=S.session.user.id;
+  S.qc=await queue.count();
+  await Promise.all([loadMeta(uid),loadTx(uid),loadBudgets(uid),loadGoals(uid),loadRecurring(uid),loadSnaps(uid)]);
+  compute(); render(); drainQ();
+}
+
+async function loadMeta(uid){
+  const [{data:me},{data:acc},{data:cat}]=await Promise.all([
+    sb.from('users').select('*').eq('id',uid).maybeSingle(),
+    sb.from('accounts').select('*').eq('is_archived',false).order('sort_order'),
+    sb.from('categories').select('*').eq('is_archived',false).order('name'),
+  ]);
+  if(me) S.currency=me.primary_currency||'KES';
+  S.accounts=acc||[]; S.categories=cat||[];
+}
+async function loadTx(uid){
+  const yr=yrStart().toISOString();
+  const {data}=await sb.from('transactions').select('*').eq('user_id',uid).gte('occurred_at',yr).order('occurred_at',{ascending:false});
+  const all=data||[]; const td=todayL(),wk=wkStart(),mo=moStart();
+  S.txToday=all.filter(t=>new Date(t.occurred_at)>=td);
+  S.txWeek =all.filter(t=>new Date(t.occurred_at)>=wk);
+  S.txMonth=all.filter(t=>new Date(t.occurred_at)>=mo);
+  S.txYear =all;
+}
+async function loadBudgets(uid){ const {data}=await sb.from('budgets').select('*').eq('user_id',uid); S.budgets=data||[]; }
+async function loadGoals(uid){ const {data}=await sb.from('goals').select('*').eq('user_id',uid).eq('is_complete',false).order('priority'); S.goals=data||[]; }
+async function loadRecurring(uid){ const {data}=await sb.from('recurring').select('*').eq('user_id',uid).eq('is_active',true).order('name'); S.recurring=data||[]; }
+async function loadSnaps(uid){
+  const since=addD(todayL(),-30).toISOString();
+  const {data}=await sb.from('snapshots').select('*').eq('user_id',uid).gte('as_of',since).order('as_of');
+  S.snapshots={}; const byD={};
+  for(const s of data||[]){
+    if(!S.snapshots[s.account_id]||s.as_of>S.snapshots[s.account_id].as_of) S.snapshots[s.account_id]=s;
+    byD[s.as_of]=(byD[s.as_of]||0)+Number(s.balance_primary);
+  }
+  S.nwHist=Object.entries(byD).map(([date,nw])=>({date,nw})).sort((a,b)=>a.date.localeCompare(b.date));
+}
+
+function compute(){
+  const sumOut=(txs)=>txs.filter(t=>t.direction==='out').reduce((s,t)=>s+Number(t.amount_primary||t.amount||0),0);
+  const sumIn =(txs)=>txs.filter(t=>t.direction==='in' ).reduce((s,t)=>s+Number(t.amount_primary||t.amount||0),0);
+  function axRoll(txs){ const r={I:0,P:0,Su:0,L:0};
+    for(const t of txs) if(t.direction==='out'&&t.axis){const a=Number(t.amount_primary||t.amount||0);
+      if(t.axis==='INVEST')r.I+=a; else if(t.axis==='PROTECT')r.P+=a; else if(t.axis==='SUSTAIN')r.Su+=a; else r.L+=a;} return r; }
+  S.axT=axRoll(S.txToday); S.axW=axRoll(S.txWeek); S.axM=axRoll(S.txMonth);
+  S.kpis.spentD=sumOut(S.txToday); S.kpis.inD=sumIn(S.txToday);
+  S.kpis.spentW=sumOut(S.txWeek); S.kpis.spentM=sumOut(S.txMonth);
+  const totD=S.axT.I+S.axT.P+S.axT.Su+S.axT.L;
+  S.kpis.leakPct=totD>0?(S.axT.L/totD)*100:0;
+  const inM=sumIn(S.txMonth);
+  S.kpis.savingsRate=inM>0?((S.axM.I+S.axM.P)/inM)*100:0;
+  S.nw=S.accounts.reduce((s,a)=>{ const sn=S.snapshots[a.id]; return s+Number(sn?sn.balance_primary:a.opening_balance||0); },0);
+  // Week days
+  S.weekDays=[]; const ws=wkStart();
+  for(let i=0;i<7;i++){
+    const d=addD(ws,i),de=addD(d,1);
+    const tx=S.txYear.filter(t=>{const dt=new Date(t.occurred_at);return dt>=d&&dt<de&&t.direction==='out';});
+    const r={date:d,label:dayL(d),I:0,P:0,Su:0,L:0,total:0};
+    for(const t of tx){const a=Number(t.amount_primary||t.amount||0);r.total+=a;
+      if(t.axis==='INVEST')r.I+=a;else if(t.axis==='PROTECT')r.P+=a;else if(t.axis==='SUSTAIN')r.Su+=a;else r.L+=a;}
+    S.weekDays.push(r);
+  }
+  // Month days (heatmap)
+  S.monthDays=[]; const ms=moStart(); const now=todayL();
+  const dim=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+  for(let i=0;i<dim;i++){
+    const d=addD(ms,i),de=addD(d,1);
+    const tot=S.txYear.filter(t=>{const dt=new Date(t.occurred_at);return dt>=d&&dt<de&&t.direction==='out';})
+      .reduce((s,t)=>s+Number(t.amount_primary||t.amount||0),0);
+    S.monthDays.push({date:d,total:tot});
+  }
+  // Runway
+  const liq=S.accounts.filter(a=>['operating','buffer','cash'].includes(a.kind))
+    .reduce((s,a)=>s+Number(S.snapshots[a.id]?.balance_primary||a.opening_balance||0),0);
+  const burn=S.kpis.spentM/Math.max(1,now.getDate())*30;
+  S.kpis.runway=burn>0?Math.round(liq/burn*30):null;
+}
+
+// ── OFFLINE ──────────────────────────────────────────────────
+async function enqueueTx(payload){
+  const lid=crypto.randomUUID();
+  await queue.push({...payload,lid,_q:true}); S.qc++; return {lid,data:{...payload,lid}};
+}
+async function drainQ(){
+  if(!sb||!S.session||!S.online) return;
+  const items=await queue.all(); if(!items.length) return;
+  let ok=0;
+  for(const item of items){
+    const {lid,_q,...payload}=item; payload.id=lid;
+    const {error}=await sb.from('transactions').upsert(payload,{onConflict:'id'});
+    if(!error){await queue.del(lid);ok++;}
+  }
+  if(ok){S.qc=await queue.count();toast(`Synced ${ok} queued transaction${ok>1?'s':''}`);await loadAll();}
+}
+async function insertTx(payload){
+  payload.user_id=S.session.user.id; payload.occurred_at=payload.occurred_at||iso();
+  payload.amount_primary=payload.amount_primary??payload.amount;
+  if(S.online&&sb){ const {data,error}=await sb.from('transactions').insert(payload).select().single(); return{data,error,q:false}; }
+  const r=await enqueueTx(payload); return{data:r.data,error:null,q:true};
+}
+async function refreshSnaps(){
+  if(!sb||!S.session) return;
+  const {error}=await sb.rpc('refresh_snapshots_today',{p_user:S.session.user.id});
+  if(!error) await loadSnaps(S.session.user.id);
+}
+
+// ── SPARKLINE ────────────────────────────────────────────────
+function spark(pts,w=120,h=28,color='var(--invest)'){
+  if(!pts||pts.length<2){ const s=document.createElementNS('http://www.w3.org/2000/svg','svg'); s.setAttribute('width',w);s.setAttribute('height',h);return s; }
+  const mn=Math.min(...pts),mx=Math.max(...pts),rng=mx-mn||1;
+  const xs=pts.map((_,i)=>i/(pts.length-1)*w);
+  const ys=pts.map(p=>h-(p-mn)/rng*(h-4)-2);
+  const d=xs.map((x,i)=>`${i===0?'M':'L'}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ');
+  const svgEl=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svgEl.setAttribute('width',w);svgEl.setAttribute('height',h);svgEl.setAttribute('viewBox',`0 0 ${w} ${h}`);
+  const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+  path.setAttribute('d',d);path.setAttribute('fill','none');path.setAttribute('stroke',color);
+  path.setAttribute('stroke-width','1.5');path.setAttribute('stroke-linecap','round');path.setAttribute('stroke-linejoin','round');
+  svgEl.appendChild(path); return svgEl;
+}
+
+// ── RENDER ───────────────────────────────────────────────────
+function render(){
+  const app=$('#app'); app.innerHTML='';
+  if(!sb||!S.session){app.appendChild(vAuth());return;}
+  app.appendChild(vShell());
+}
+
+function vShell(){
+  const root=el('div');
+  const qb=S.qc>0?el('span',{class:'qbadge'},S.qc+' q'):null;
+  const maskBtn=el('button',{class:'mask-btn',onclick:()=>{
+    S.masked=!S.masked;localStorage.setItem('ledger:masked',S.masked?'1':'0');render();
+  }},S.masked?'SHOW':'HIDE');
+  root.appendChild(el('div',{class:'topbar'},
+    el('div',{class:'brand'},el('span',{class:'dot'}),'LEDGER',el('span',{class:'os'},' OS')),
+    el('div',{class:'status'},maskBtn,qb,el('span',{class:'pulse'+(S.online?'':' off')}),
+      S.online?'LIVE':'OFFLINE',' · ',new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short'}).toUpperCase())
+  ));
+  const nav=el('div',{class:'bottomnav'});
+  for(const [id,ic,lb] of [['today','·','Today'],['week','#','Week'],['month','≋','Month'],['plan','◎','Plan'],['accounts','≡','Accts'],['settings','⚙','More']]){
+    nav.appendChild(el('button',{class:S.tab===id?'active':'',onclick:()=>{S.tab=id;render();}},el('span',{class:'bicon'},ic),lb));
+  }
+  root.appendChild(nav);
+  const m=el('main');
+  if(S.tab==='today')    m.appendChild(vToday());
+  if(S.tab==='week')     m.appendChild(vWeek());
+  if(S.tab==='month')    m.appendChild(vMonth());
+  if(S.tab==='plan')     m.appendChild(vPlan());
+  if(S.tab==='accounts') m.appendChild(vAccounts());
+  if(S.tab==='settings') m.appendChild(vSettings());
+  root.appendChild(m);
+  root.appendChild(el('button',{class:'fab',onclick:openLog,'aria-label':'Log'},'+'));
+  return root;
+}
+
+// ── TODAY ────────────────────────────────────────────────────
+function vToday(){
+  const f=document.createDocumentFragment();
+  const now=new Date();
+  const hero=el('div',{class:'hero'});
+  hero.appendChild(el('div',{class:'r1'},
+    el('div',{class:'lbl'},'Net worth'),
+    el('div',{class:'ts'},now.toLocaleString('en-GB',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}).toUpperCase())
+  ));
+  const nwEl=el('div',{class:'nw'+(S.masked?' masked':'')},el('span',{class:'cur'},S.currency),S.masked?'••••••':fmtX(S.nw));
+  hero.appendChild(nwEl);
+  if(S.nwHist.length>=2) hero.appendChild(spark(S.nwHist.map(x=>x.nw),240,32));
+  hero.appendChild(el('div',{class:'delta'},el('span',{class:'mono'},'TODAY '),
+    el('span',{class:'dn'},'−'+fmt(S.kpis.spentD)),'  ',el('span',{class:'up'},'+'+fmt(S.kpis.inD))));
+  hero.appendChild(axBar(S.axT));
+  f.appendChild(hero);
+  const kpis=el('div',{class:'kpis'});
+  kpis.appendChild(kpi('Today out',fmt(S.kpis.spentD),S.currency));
+  kpis.appendChild(kpi('Today in',fmt(S.kpis.inD),S.currency));
+  kpis.appendChild(kpi('Leak %',S.kpis.leakPct.toFixed(0)+'%','target <15%',S.kpis.leakPct>20?'var(--leak)':null));
+  kpis.appendChild(kpi('Week',fmt(S.kpis.spentW),S.currency));
+  kpis.appendChild(kpi('Runway',S.kpis.runway!=null?S.kpis.runway+'d':'—','days liquid',S.kpis.runway!=null&&S.kpis.runway<60?'var(--leak)':null));
+  kpis.appendChild(kpi('Save rate',S.kpis.savingsRate.toFixed(0)+'%','of month in'));
+  f.appendChild(kpis);
+  f.appendChild(sHead('Ledger · Today',S.txToday.length+' entries'));
+  if(!S.txToday.length){ f.appendChild(el('div',{class:'card empty'},el('div',{class:'big'},'Clean.'),el('div',{class:'sm'},'Tap + to log.'))); }
+  else{
+    const bkts={Evening:[],Afternoon:[],Morning:[]};
+    for(const t of S.txToday){const h=new Date(t.occurred_at).getHours();bkts[h>=17?'Evening':h>=12?'Afternoon':'Morning'].push(t);}
+    for(const lb of ['Evening','Afternoon','Morning']){ if(!bkts[lb].length) continue;
+      f.appendChild(el('div',{class:'txgl'},lb)); for(const t of bkts[lb]) f.appendChild(txR(t)); }
+  }
+  return f;
+}
+
+// ── WEEK ─────────────────────────────────────────────────────
+function vWeek(){
+  const f=document.createDocumentFragment();
+  const ws=wkStart(),we=addD(ws,6);
+  f.appendChild(sHead('Week of '+dISO(ws),dISO(ws)+' → '+dISO(we)));
+  // Bar chart
+  const cc=el('div',{class:'card',style:{padding:'16px'}});
+  cc.appendChild(el('div',{class:'caps',style:{marginBottom:'8px'}},'Daily · '+S.currency));
+  const maxD=Math.max(1,...S.weekDays.map(d=>d.total));
+  const bars=el('div',{class:'wbars'});
+  const td=dISO(todayL());
+  for(const d of S.weekDays){
+    const w=el('div',{class:'wbw'});
+    const col=el('div',{class:'wbc'});
+    for(const [k,c] of [['L','var(--leak)'],['Su','var(--sustain)'],['P','var(--protect)'],['I','var(--invest)']]){
+      const h=Math.max(0,(d[k]/maxD)*72);
+      if(h<1) continue;
+      col.appendChild(el('div',{class:'wbs',style:{height:h+'px',background:c}}));
+    }
+    w.appendChild(col);
+    w.appendChild(el('div',{class:'wbd'+(dISO(d.date)===td?' today':'')},d.label));
+    w.appendChild(el('div',{class:'wba'},d.total>0?fmt(d.total):''));
+    bars.appendChild(w);
+  }
+  cc.appendChild(bars);
+  const totW=S.axW.I+S.axW.P+S.axW.Su+S.axW.L||1;
+  const lg=el('div',{class:'axleg',style:{marginTop:'12px'}});
+  for(const [k,a] of [['I','INVEST'],['P','PROTECT'],['Su','SUSTAIN'],['L','LEAK']]){
+    lg.appendChild(el('div',{},el('span',{class:'sw',style:{background:aC(a)}}),a.toLowerCase(),
+      el('span',{class:'pct'},((S.axW[k]/totW)*100).toFixed(0)+'%')));
+  }
+  cc.appendChild(lg);
+  f.appendChild(cc);
+  const ks=el('div',{class:'kpis',style:{marginTop:'10px'}});
+  ks.appendChild(kpi('Week spend',fmt(S.kpis.spentW),S.currency));
+  ks.appendChild(kpi('LEAK',((S.axW.L/totW)*100).toFixed(0)+'%','target <15%',S.axW.L/totW>.15?'var(--leak)':null));
+  ks.appendChild(kpi('Active days',S.weekDays.filter(d=>d.total>0).length+'/7','this week'));
+  f.appendChild(ks);
+  f.appendChild(sHead('Entries this week',S.txWeek.length+' tx'));
+  if(!S.txWeek.length) f.appendChild(el('div',{class:'card empty'},el('div',{class:'big'},'Nothing yet this week.')));
+  else for(const t of S.txWeek.slice(0,60)) f.appendChild(txR(t));
+  return f;
+}
+
+// ── MONTH ────────────────────────────────────────────────────
+function vMonth(){
+  const f=document.createDocumentFragment();
+  const now=new Date();
+  const mo=now.toLocaleDateString('en-GB',{month:'long',year:'numeric'}).toUpperCase();
+  f.appendChild(sHead(mo));
+  // Heatmap
+  const hc=el('div',{class:'card',style:{padding:'16px'}});
+  hc.appendChild(el('div',{class:'caps',style:{marginBottom:'10px'}},'Spend heatmap'));
+  const hw=el('div',{class:'heatmap'});
+  const maxD2=Math.max(1,...S.monthDays.map(d=>d.total));
+  for(const d of S.monthDays){
+    const pct=d.total/maxD2; const alpha=Math.round(pct*210).toString(16).padStart(2,'0');
+    const isToday=dISO(d.date)===dISO(todayL());
+    hw.appendChild(el('div',{class:'hm',
+      style:{background:pct<0.01?'var(--bg-2)':`#ef4444${alpha}`,
+             border:isToday?'1px solid var(--accent)':'1px solid transparent'},
+      title:dISO(d.date)+': '+S.currency+' '+fmtX(d.total)}));
+  }
+  hc.appendChild(hw);
+  hc.appendChild(el('div',{style:{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--ink-4)',marginTop:'6px'}},
+    'Each cell = 1 day · Red = high spend · Outlined = today'));
+  f.appendChild(hc);
+  const inM=S.txMonth.filter(t=>t.direction==='in').reduce((s,t)=>s+Number(t.amount_primary||t.amount||0),0);
+  const totM=S.axM.I+S.axM.P+S.axM.Su+S.axM.L||1;
+  const ks=el('div',{class:'kpis',style:{marginTop:'10px'}});
+  ks.appendChild(kpi('Month out',fmt(S.kpis.spentM),S.currency));
+  ks.appendChild(kpi('Month in',fmt(inM),S.currency));
+  ks.appendChild(kpi('Net',fmt(inM-S.kpis.spentM),S.currency,inM>=S.kpis.spentM?'var(--invest)':'var(--leak)'));
+  ks.appendChild(kpi('Save rate',S.kpis.savingsRate.toFixed(0)+'%','I+P / in'));
+  ks.appendChild(kpi('INVEST',fmt(S.axM.I),((S.axM.I/totM)*100).toFixed(0)+'%'));
+  ks.appendChild(kpi('LEAK',fmt(S.axM.L),((S.axM.L/totM)*100).toFixed(0)+'%',S.axM.L/totM>.2?'var(--leak)':null));
+  f.appendChild(ks);
+  // Axis breakdown card
+  const axc=el('div',{class:'card',style:{padding:'16px',marginTop:'10px'}});
+  axc.appendChild(el('div',{class:'caps',style:{marginBottom:'8px'}},'Month axis split'));
+  axc.appendChild(axBar(S.axM,true));
+  f.appendChild(axc);
+  f.appendChild(sHead('All transactions',S.txMonth.length+' entries'));
+  for(const t of S.txMonth.slice(0,100)) f.appendChild(txR(t));
+  return f;
+}
+
+// ── PLAN ─────────────────────────────────────────────────────
+function vPlan(){
+  const f=document.createDocumentFragment();
+  // BUDGETS
+  f.appendChild(sHead('Budgets',null,()=>openBudget()));
+  if(!S.budgets.length){
+    f.appendChild(el('div',{class:'card empty'},el('div',{class:'big'},'No budgets.'),el('div',{class:'sm'},'Monthly limits per category or axis.')));
+  } else {
+    const bc=el('div',{class:'card'});
+    for(const b of S.budgets){
+      const cat=S.categories.find(c=>c.id===b.category_id);
+      const label=cat?.name||(b.axis?b.axis:'Global');
+      const actual=S.txMonth.filter(t=>t.direction==='out'
+        &&(b.category_id?t.category_id===b.category_id:true)
+        &&(b.axis?t.axis===b.axis:true))
+        .reduce((s,t)=>s+Number(t.amount_primary||t.amount||0),0);
+      const pct=Math.min(100,(actual/Math.max(1,b.amount))*100);
+      const over=actual>b.amount;
+      const row=el('div',{class:'brow',style:{cursor:'pointer'},onclick:()=>openBudget(b)});
+      row.appendChild(el('div',{class:'brow-h'},el('div',{class:'brow-n'},label),
+        el('div',{class:'brow-nums'},fmt(actual)+' / '+fmt(b.amount)+' '+b.currency+(over?' ⚠':''))));
+      const tr=el('div',{class:'btrack'});
+      tr.appendChild(el('div',{class:'bfill'+(over?' over':''),style:{width:pct+'%',background:over?undefined:aC(b.axis||'SUSTAIN')}}));
+      row.appendChild(tr);
+      bc.appendChild(row);
+    }
+    f.appendChild(bc);
+  }
+  // GOALS
+  f.appendChild(sHead('Goals',S.goals.length+' active',()=>openGoal()));
+  if(!S.goals.length){
+    f.appendChild(el('div',{class:'card empty'},el('div',{class:'big'},'No goals.'),el('div',{class:'sm'},'USMLE fund, emergency buffer, house deposit…')));
+  } else for(const g of S.goals) f.appendChild(gCard(g));
+  // RECURRING
+  f.appendChild(sHead('Recurring',S.recurring.length+' active',()=>openRecurring()));
+  if(!S.recurring.length){
+    f.appendChild(el('div',{class:'card empty'},el('div',{class:'big'},'No recurring.'),el('div',{class:'sm'},'Rent, tithe, subscriptions, Uzimatek salary.')));
+  } else for(const r of S.recurring) f.appendChild(rRow(r));
+  return f;
+}
+
+function gCard(g){
+  const linked=S.accounts.find(a=>a.id===g.linked_account_id);
+  const sn=linked?S.snapshots[linked.id]:null;
+  const cur=sn?Number(sn.balance_primary):0;
+  const pct=Math.min(100,(cur/Math.max(1,g.target_amount))*100);
+  const dLeft=g.target_date?Math.max(0,Math.ceil((new Date(g.target_date)-Date.now())/864e5)):null;
+  const mLeft=dLeft!=null?Math.max(0.1,dLeft/30.44):null;
+  const need=mLeft?(g.target_amount-cur)/mLeft:null;
+  const c=el('div',{class:'gc',style:{cursor:'pointer'},onclick:()=>openGoal(g)});
+  c.appendChild(el('div',{class:'gc-h'},
+    el('div',{},el('div',{class:'gc-n'},g.name),linked?el('div',{style:{fontFamily:'var(--mono)',fontSize:'11px',color:'var(--ink-3)',marginTop:'2px'}},linked.name):null),
+    el('div',{class:'gc-pct'},pct.toFixed(0)+'%')
+  ));
+  const tr=el('div',{class:'gtrack'}); tr.appendChild(el('div',{class:'gfill',style:{width:pct+'%'}})); c.appendChild(tr);
+  const m=el('div',{class:'gmeta'});
+  const gs=(lb,v)=>{const d=el('div',{class:'gs'});d.appendChild(el('div',{class:'gl'},lb));d.appendChild(el('div',{class:'gv'},v));return d;};
+  m.appendChild(gs('Current',fmt(cur)));m.appendChild(gs('Target',fmt(g.target_amount)));
+  m.appendChild(gs('Need/mo',need!=null?fmt(need):'—'));
+  if(g.target_date)m.appendChild(gs('Deadline',new Date(g.target_date).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})));
+  if(dLeft!=null)m.appendChild(gs('Days left',dLeft+'d'));
+  c.appendChild(m);
+  return c;
+}
+
+function rRow(r){
+  const tmpl=r.template||{};
+  const cat=S.categories.find(c=>c.id===tmpl.category_id);
+  const acc=S.accounts.find(a=>a.id===tmpl.account_id);
+  const row=el('div',{class:'rrow'});
+  row.appendChild(el('div',{style:{width:'4px',height:'28px',borderRadius:'1px',background:aC(tmpl.axis),flexShrink:0}}));
+  row.appendChild(el('div',{style:{flex:1,minWidth:0}},
+    el('div',{style:{fontWeight:500,fontSize:'14px'}},r.name),
+    el('div',{style:{fontFamily:'var(--mono)',fontSize:'11px',color:'var(--ink-3)',marginTop:'2px'}},[cat?.name,acc?.name].filter(Boolean).join(' · '))
+  ));
+  row.appendChild(el('div',{style:{textAlign:'right',flexShrink:0}},
+    el('div',{class:'rcad'},r.cadence),
+    el('div',{style:{fontFamily:'var(--mono)',fontWeight:600,fontSize:'14px',marginTop:'4px'}},
+      el('span',{style:{color:'var(--ink-3)',fontSize:'10px',marginRight:'4px'}},tmpl.currency),fmt(Number(tmpl.amount||0))),
+    r.next_run?el('div',{style:{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--ink-4)',marginTop:'2px'}},'next '+r.next_run):null
+  ));
+  const pb=el('button',{class:'btn-g',style:{marginLeft:'8px',padding:'6px 10px'},onclick:async(e)=>{
+    e.stopPropagation();pb.textContent='…';
+    const {error}=await sb.rpc('post_recurring',{p_recurring_id:r.id});
+    if(error)toast('Failed: '+error.message); else{toast('Posted: '+r.name);await loadAll();}
+  }},'▷');
+  row.appendChild(pb);
+  row.style.cursor='pointer'; row.onclick=(e)=>{if(e.target===pb)return;openRecurring(r);};
+  return row;
+}
+
+// ── ACCOUNTS ─────────────────────────────────────────────────
+function vAccounts(){
+  const f=document.createDocumentFragment();
+  f.appendChild(sHead('Accounts',null,()=>openAccount()));
+  if(!S.accounts.length){
+    const b=el('div',{class:'card empty'},el('div',{class:'big'},'No accounts.'),el('div',{class:'sm'},'Seed or add manually.'));
+    b.appendChild(el('button',{class:'submit',style:{marginTop:'16px',maxWidth:'260px'},onclick:seed},'Seed 5 accounts + 25 categories'));
+    f.appendChild(b);
+  } else {
+    const hw=el('div',{class:'hero',style:{marginBottom:'10px'}});
+    hw.appendChild(el('div',{class:'lbl'},'Total net worth'));
+    hw.appendChild(el('div',{class:'nw',style:{fontSize:'36px'}},el('span',{class:'cur'},S.currency),fmtX(S.nw)));
+    if(S.nwHist.length>=2) hw.appendChild(spark(S.nwHist.map(x=>x.nw),240,28));
+    f.appendChild(hw);
+    for(const a of S.accounts){
+      const sn=S.snapshots[a.id]; const bal=sn?Number(sn.balance_primary):Number(a.opening_balance||0);
+      const row=el('div',{class:'lrow',style:{cursor:'pointer'},onclick:()=>openAccount(a)});
+      row.appendChild(el('div',{class:'sw',style:{background:a.color||'var(--ink-4)'}}));
+      row.appendChild(el('div',{class:'mid'},el('div',{class:'n'},a.name),
+        el('div',{class:'m'},[a.institution,a.kind.toUpperCase()].filter(Boolean).join(' · '))));
+      row.appendChild(el('div',{class:'r'},
+        el('div',{class:'bal'},el('span',{class:'cur'},a.currency),fmtX(bal)),
+        sn?el('div',{class:'bdate'},'as of '+sn.as_of):el('div',{class:'bdate'},'opening')
+      ));
+      f.appendChild(row);
+    }
+    f.appendChild(el('button',{class:'btn-g',style:{marginTop:'12px',width:'100%'},
+      onclick:async()=>{await refreshSnaps();toast('Balances refreshed');await loadAll();}},'↻ Refresh balances'));
+  }
+  return f;
+}
+
+// ── SETTINGS ─────────────────────────────────────────────────
+function vSettings(){
+  const f=document.createDocumentFragment();
+  f.appendChild(sHead('Settings'));
+  const sRow=(n,m,a)=>el('div',{class:'lrow'},el('div',{class:'mid'},el('div',{class:'n'},n),el('div',{class:'m'},m)),a?el('div',{class:'r'},a):null);
+  f.appendChild(sRow(S.session?.user?.email||'—','Signed in · '+S.currency,
+    el('button',{class:'btn-g',onclick:async()=>{await sb.auth.signOut();location.reload();}},'sign out')));
+  f.appendChild(sRow('Seed starter data','5 accounts + 25 categories',el('button',{class:'btn-g',onclick:seed},'run')));
+  f.appendChild(sRow('Refresh snapshots','Recompute all account balances',
+    el('button',{class:'btn-g',onclick:async()=>{await refreshSnaps();toast('Done');}}, 'run')));
+  f.appendChild(sRow('Offline queue',S.qc>0?S.qc+' pending':'clean',
+    S.qc>0?el('button',{class:'btn-g',onclick:async()=>{await drainQ();render();}},'sync'):null));
+  f.appendChild(sRow('Reset config','Forget Supabase URL + key',
+    el('button',{class:'btn-g btn-d',onclick:()=>{
+      if(!confirm('Reset?')) return;
+      localStorage.removeItem('ledger:url');localStorage.removeItem('ledger:anon');location.reload();
+    }},'reset')));
+  f.appendChild(el('div',{style:{marginTop:'30px',textAlign:'center',fontFamily:'var(--mono)',fontSize:'10px',color:'var(--ink-4)'}},
+    'LEDGER OS v2.0 · Phase 2 · '+(S.online?'online':'offline')));
+  return f;
+}
+
+// ── SHARED COMPONENTS ────────────────────────────────────────
+function sHead(title,meta,action){
+  const h=el('div',{class:'sh'},el('div',{class:'t'},title));
+  if(meta) h.appendChild(el('div',{class:'m'},meta));
+  if(action) h.appendChild(el('button',{onclick:action},'+  New'));
+  return h;
+}
+function txR(t){
+  const cat=S.categories.find(c=>c.id===t.category_id);
+  const acc=S.accounts.find(a=>a.id===t.account_id);
+  const sign=t.direction==='in'?'+':t.direction==='out'?'−':'↔';
+  const tm=new Date(t.occurred_at);
+  const time=tm.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  const ds=tm.toLocaleDateString('en-GB',{day:'2-digit',month:'short'});
+  const row=el('div',{class:'tx','data-d':t.direction,onclick:()=>openEditTx(t)},
+    el('div',{class:'stripe',style:{background:aC(t.axis)}}),
+    el('div',{class:'mid'},
+      el('div',{class:'cat'},cat?.name||(t.direction==='transfer'?'Transfer':'Uncategorised')),
+      el('div',{class:'meta'},[acc?.name,t.note].filter(Boolean).join(' · '))
+    ),
+    el('div',{class:'right'},
+      el('div',{class:'amt'},el('span',{class:'cur'},t.currency),sign+(S.masked?'••••':fmt(Number(t.amount)))),
+      el('div',{class:'time'},ds+' '+time)
+    ),
+    el('div',{class:'edit-hint'},'✎')
+  );
+  return row;
+}
+function kpi(l,v,sub,color){
+  const d=el('div',{class:'kpi'+(S.masked?' masked':'')});
+  d.appendChild(el('div',{class:'l'},l));
+  const vEl=el('div',{class:'v',style:color?{color}:{}},S.masked?'••••':v);
+  d.appendChild(vEl);
+  if(sub) d.appendChild(el('div',{class:'sub'},sub));
+  // staggered animation
+  d.style.animationDelay=(Math.random()*0.15).toFixed(2)+'s';
+  return d;
+}
+function axBar(ax,withLegend){
+  const obj=typeof ax.I!=='undefined'?{INVEST:ax.I,PROTECT:ax.P,SUSTAIN:ax.Su,LEAK:ax.L}:ax;
+  const tot=Math.max(1,Object.values(obj).reduce((a,b)=>a+b,0));
+  const wrap=el('div',{});
+  const bar=el('div',{class:'axbar'});
+  for(const a of ['INVEST','PROTECT','SUSTAIN','LEAK']){
+    const pct=(obj[a]/tot)*100;
+    bar.appendChild(el('span',{style:{background:aC(a),flexBasis:pct+'%',flexGrow:pct>0?1:0,flexShrink:1}}));
+  }
+  wrap.appendChild(bar);
+  if(withLegend){
+    const lg=el('div',{class:'axleg',style:{marginTop:'10px'}});
+    for(const a of ['INVEST','PROTECT','SUSTAIN','LEAK'])
+      lg.appendChild(el('div',{},el('span',{class:'sw',style:{background:aC(a)}}),a.toLowerCase(),
+        el('span',{class:'pct'},fmt(obj[a])+' ('+((obj[a]/tot)*100).toFixed(0)+'%)') ));
+    wrap.appendChild(lg);
+  }
+  return wrap;
+}
+
+// ── SHEET FACTORY ────────────────────────────────────────────
+function mkSheet(title){
+  const bd=el('div',{class:'sb',onclick:cls});
+  const sh=el('div',{class:'sheet'});
+  sh.appendChild(el('div',{class:'grab'}));
+  sh.appendChild(el('header',{},el('h2',{},title),el('button',{class:'x',onclick:cls},'×')));
+  const body=el('div',{class:'body'}); sh.appendChild(body);
+  document.body.appendChild(bd);document.body.appendChild(sh);
+  requestAnimationFrame(()=>{bd.classList.add('open');sh.classList.add('open');});
+  function cls(){bd.classList.remove('open');sh.classList.remove('open');setTimeout(()=>{bd.remove();sh.remove();},280);}
+  return{body,close:cls};
+}
+function mkField(label,input){ const f=el('div',{class:'field'});f.appendChild(el('div',{class:'l'},label));f.appendChild(input);return f; }
+function mkSel(opts,cur,cb){ const s=el('select',{class:'sel',onchange:(e)=>cb(e.target.value)});
+  for(const [v,l] of opts) s.appendChild(el('option',{value:v,selected:v===(cur||'')},l)); return s; }
+
+// ── EDIT TRANSACTION SHEET ───────────────────────────────────
+function openEditTx(t){
+  const f={
+    amt:String(t.amount),dir:t.direction,acc:t.account_id,
+    cat:t.category_id,axis:t.axis,note:t.note||'',
+    dt:new Date(t.occurred_at).toISOString()
+  };
+  const {body,close}=mkSheet('Edit transaction');
+  // Amount
+  const accObj=()=>S.accounts.find(a=>a.id===f.acc);
+  const curL=el('span',{class:'cur'},accObj()?.currency||S.currency);
+  const amtIn=el('input',{type:'text',inputmode:'decimal',autocomplete:'off',value:f.amt,
+    oninput:(e)=>{e.target.value=e.target.value.replace(/[^\d.]/g,'').replace(/(\..*)\./g,'$1');f.amt=e.target.value;}});
+  body.appendChild(el('div',{class:'amtwrap'},curL,amtIn));
+  // Note
+  body.appendChild(mkField('Note',el('input',{class:'ibox',type:'text',maxlength:'500',value:f.note,
+    placeholder:'e.g. lunch at Mama Sue',oninput:(e)=>f.note=e.target.value})));
+  // Date override
+  const localDt=new Date(new Date(f.dt).getTime()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16);
+  body.appendChild(mkField('Date / time',el('input',{class:'ibox',type:'datetime-local',value:localDt,
+    onchange:(e)=>f.dt=new Date(e.target.value).toISOString()})));
+  // Category
+  const catField=el('div',{class:'field'}); catField.appendChild(el('div',{class:'l'},'Category'));
+  const srch=el('input',{class:'cat-search',type:'text',placeholder:'Search…',oninput:()=>rCats(srch.value)});
+  catField.appendChild(srch);
+  const cc=el('div',{class:'chips'}); catField.appendChild(cc); body.appendChild(catField);
+  function rCats(q=''){
+    cc.innerHTML='';
+    const list=[...S.categories]
+      .filter(c=>(f.dir==='in'?c.is_income:!c.is_income)&&(!q||c.name.toLowerCase().includes(q.toLowerCase())))
+      .sort((a,b)=>a.name.localeCompare(b.name));
+    for(const c of list.slice(0,30)){
+      const ch=el('button',{class:'chip'+(f.cat===c.id?' active':''),onclick:()=>{
+        f.cat=c.id;cc.querySelectorAll('.chip').forEach(x=>x.classList.remove('active'));ch.classList.add('active');
+        if(c.default_axis)f.axis=c.default_axis;
+      }},c.name);
+      cc.appendChild(ch);
+    }
+  }
+  rCats();
+  // Axis
+  const axf=el('div',{class:'field'}); axf.appendChild(el('div',{class:'l'},'Axis'));
+  const ag=el('div',{class:'axgrid'});
+  for(const [n,d] of [['INVEST','compounds'],['PROTECT','mitigates'],['SUSTAIN','sustains'],['LEAK','destroys']]){
+    const b=el('button',{class:'axbtn'+(f.axis===n?' active':''),dataset:{a:n},onclick:()=>{
+      f.axis=n;ag.querySelectorAll('.axbtn').forEach(x=>x.classList.remove('active'));b.classList.add('active');}},
+      el('div',{class:'n'},n),el('div',{class:'d'},d));
+    ag.appendChild(b);
+  }
+  axf.appendChild(ag); body.appendChild(axf);
+  // Save
+  body.appendChild(el('button',{class:'submit',onclick:async()=>{
+    const {error}=await sb.from('transactions').update({
+      amount:Number(f.amt),note:f.note||null,category_id:f.cat,
+      axis:f.axis,occurred_at:f.dt,amount_primary:Number(f.amt)
+    }).eq('id',t.id);
+    if(error){toast('Error: '+error.message);return;}
+    close();await loadAll();toast('Updated');
+  }},'Save changes'));
+  // Delete
+  body.appendChild(el('button',{class:'delete-btn',onclick:async()=>{
+    if(!confirm('Delete this transaction?')) return;
+    const {error}=await sb.from('transactions').delete().eq('id',t.id);
+    if(error){toast('Error: '+error.message);return;}
+    close();await loadAll();toast('Deleted');
+  }},'Delete transaction'));
+}
+
+// ── LOG SHEET ────────────────────────────────────────────────
+function openLog(pre={}){
+  if(!S.accounts.length||!S.categories.length){toast('Seed first',{label:'GO',cb:()=>{S.tab='settings';render()}});return;}
+  const f={dir:pre.direction||'out',amt:pre.amount?String(pre.amount):'',
+    acc:pre.account_id||S.lu.account||S.accounts[0]?.id,
+    cat:pre.category_id||S.lu.category||null,axis:pre.axis||null,note:pre.note||''};
+  const {body,close}=mkSheet('Log transaction');
+  // Direction
+  const seg=el('div',{class:'seg'});
+  for(const [d,l] of [['out','Out'],['in','In'],['transfer','Transfer']]){
+    const b=el('button',{class:f.dir===d?'active':'',onclick:()=>{f.dir=d;seg.querySelectorAll('button').forEach(x=>x.classList.remove('active'));b.classList.add('active');rCats();validate();}},l);
+    seg.appendChild(b);
+  }
+  body.appendChild(seg);
+  // Amount
+  const accObj=()=>S.accounts.find(a=>a.id===f.acc);
+  const curL=el('span',{class:'cur'},accObj()?.currency||S.currency);
+  const amtIn=el('input',{type:'text',inputmode:'decimal',autocomplete:'off',placeholder:'0',value:f.amt,
+    oninput:(e)=>{e.target.value=e.target.value.replace(/[^\d.]/g,'').replace(/(\..*)\./g,'$1');f.amt=e.target.value;validate();}});
+  body.appendChild(el('div',{class:'amtwrap'},curL,amtIn));
+  // Category
+  const cf=el('div',{class:'field'}); cf.appendChild(el('div',{class:'l'},'Category')); const cc=el('div',{class:'chips'}); cf.appendChild(cc); body.appendChild(cf);
+  function rCats(){
+    cc.innerHTML='';
+    const ord=[...S.categories].sort((a,b)=>{const la=S.lu.freq?.[a.id]||0,lb2=S.lu.freq?.[b.id]||0;if(lb2!==la)return lb2-la;return a.name.localeCompare(b.name);})
+      .filter(c=>f.dir==='in'?c.is_income:!c.is_income);
+    for(const c of ord.slice(0,42)){
+      const ch=el('button',{class:'chip'+(f.cat===c.id?' active':''),onclick:()=>{
+        f.cat=c.id;cc.querySelectorAll('.chip').forEach(x=>x.classList.remove('active'));ch.classList.add('active');
+        if(c.default_axis&&!f.axis){f.axis=c.default_axis;rAxis();}validate();}},c.name);
+      cc.appendChild(ch);
+    }
+  }
+  rCats();
+  // Account
+  const af=el('div',{class:'field'}); af.appendChild(el('div',{class:'l'},'Account')); const ac2=el('div',{class:'chips'}); af.appendChild(ac2); body.appendChild(af);
+  for(const a of S.accounts){
+    const ch=el('button',{class:'chip'+(f.acc===a.id?' active':''),onclick:()=>{
+      f.acc=a.id;ac2.querySelectorAll('.chip').forEach(x=>x.classList.remove('active'));ch.classList.add('active');curL.textContent=a.currency;validate();}},a.name);
+    ac2.appendChild(ch);
+  }
+  // Axis
+  const axf=el('div',{class:'field'}); axf.appendChild(el('div',{class:'l'},'Axis'));
+  const ag=el('div',{class:'axgrid'});
+  for(const [n,d] of [['INVEST','compounds'],['PROTECT','mitigates'],['SUSTAIN','sustains'],['LEAK','destroys']]){
+    const b=el('button',{class:'axbtn'+(f.axis===n?' active':''),dataset:{a:n},onclick:()=>{
+      f.axis=n;ag.querySelectorAll('.axbtn').forEach(x=>x.classList.remove('active'));b.classList.add('active');validate();}},
+      el('div',{class:'n'},n),el('div',{class:'d'},d));
+    ag.appendChild(b);
+  }
+  axf.appendChild(ag); body.appendChild(axf);
+  function rAxis(){ag.querySelectorAll('.axbtn').forEach(x=>x.classList.toggle('active',x.dataset.a===f.axis));}
+  if(f.axis) rAxis();
+  body.appendChild(mkField('Note',el('input',{class:'ibox',type:'text',maxlength:'500',placeholder:'e.g. lunch at Mama Sue',value:f.note,oninput:(e)=>f.note=e.target.value})));
+  body.appendChild(mkField('Date / time',el('input',{class:'ibox',type:'datetime-local',
+    value:new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16),
+    onchange:(e)=>f.dt=new Date(e.target.value).toISOString()})));
+  const sub=el('button',{class:'submit',disabled:true,onclick:save},'Save entry'); body.appendChild(sub);
+  function validate(){sub.disabled=!(f.amt&&Number(f.amt)>0&&f.acc&&(f.dir==='transfer'||(f.cat&&f.axis)));}
+  async function save(){
+    sub.disabled=true;sub.innerHTML='<span class="spinner"></span>';
+    const acc=S.accounts.find(a=>a.id===f.acc);
+    const payload={amount:Number(f.amt),currency:acc?.currency||S.currency,direction:f.dir,
+      account_id:f.acc,category_id:f.cat,axis:f.axis,note:f.note||null,occurred_at:f.dt||iso()};
+    const {data,error,q}=await insertTx(payload);
+    if(error){toast('Failed: '+error.message);sub.disabled=false;sub.textContent='Save entry';return;}
+    S.lu.account=f.acc;S.lu.category=f.cat;S.lu.freq=S.lu.freq||{};
+    S.lu.freq[f.cat]=(S.lu.freq[f.cat]||0)+1;localStorage.setItem('ledger:lu',JSON.stringify(S.lu));
+    close();await loadAll();
+    toast(q?'Queued offline · '+fmt(payload.amount):'Logged · '+fmt(payload.amount)+' '+payload.currency,
+      q?null:{label:'UNDO',cb:async()=>{await sb.from('transactions').delete().eq('id',data.id);await loadAll();toast('Undone');}});
+  }
+  amtIn.focus();
+}
+
+// ── BUDGET SHEET ─────────────────────────────────────────────
+function openBudget(ex=null){
+  const f={cat:ex?.category_id||null,axis:ex?.axis||null,period:ex?.period||'monthly',
+    amt:ex?.amount?String(ex.amount):'',rollover:ex?.rollover||'reset'};
+  const {body,close}=mkSheet((ex?'Edit':'New')+' budget');
+  body.appendChild(mkField('Category',mkSel([['','— none (axis-wide) —'],...S.categories.filter(c=>!c.is_income).map(c=>[c.id,c.name])],f.cat,(v)=>f.cat=v||null)));
+  body.appendChild(mkField('Axis',mkSel([['','— any —'],['INVEST','INVEST'],['PROTECT','PROTECT'],['SUSTAIN','SUSTAIN'],['LEAK','LEAK']],f.axis,(v)=>f.axis=v||null)));
+  body.appendChild(mkField('Period',mkSel([['monthly','Monthly'],['weekly','Weekly'],['quarterly','Quarterly'],['annual','Annual']],f.period,(v)=>f.period=v)));
+  const ai=el('input',{class:'ibox',type:'text',inputmode:'decimal',placeholder:'0',value:f.amt,oninput:(e)=>{e.target.value=e.target.value.replace(/[^\d.]/g,'');f.amt=e.target.value;}});
+  body.appendChild(mkField('Amount ('+S.currency+')',ai));
+  body.appendChild(mkField('Rollover',mkSel([['reset','Reset each period'],['carry_positive','Carry savings forward'],['carry_both','Carry all forward']],f.rollover,(v)=>f.rollover=v)));
+  body.appendChild(el('button',{class:'submit',onclick:async()=>{
+    if(!f.amt||Number(f.amt)<=0){toast('Enter amount');return;}
+    const pay={user_id:S.session.user.id,category_id:f.cat,axis:f.axis,period:f.period,
+      amount:Number(f.amt),currency:S.currency,rollover:f.rollover,starts_on:dISO(moStart())};
+    const {error}=ex?await sb.from('budgets').update(pay).eq('id',ex.id):await sb.from('budgets').insert(pay);
+    if(error){toast('Error: '+error.message);return;}
+    close();await loadAll();toast(ex?'Updated':'Budget created');
+  }},'Save budget'));
+  if(ex) body.appendChild(el('button',{class:'btn-g btn-d',style:{width:'100%',marginTop:'8px'},onclick:async()=>{
+    if(!confirm('Delete?')) return;await sb.from('budgets').delete().eq('id',ex.id);close();await loadAll();toast('Deleted');
+  }},'Delete'));
+}
+
+// ── GOAL SHEET ───────────────────────────────────────────────
+function openGoal(ex=null){
+  const f={name:ex?.name||'',amt:ex?.target_amount?String(ex.target_amount):'',date:ex?.target_date||'',acc:ex?.linked_account_id||null,pri:ex?.priority||3};
+  const {body,close}=mkSheet((ex?'Edit':'New')+' goal');
+  const ni=el('input',{class:'ibox',placeholder:'e.g. USMLE fund',value:f.name,oninput:(e)=>f.name=e.target.value}); body.appendChild(mkField('Goal name',ni));
+  body.appendChild(mkField('Target ('+S.currency+')',el('input',{class:'ibox',type:'text',inputmode:'decimal',placeholder:'0',value:f.amt,oninput:(e)=>{e.target.value=e.target.value.replace(/[^\d.]/g,'');f.amt=e.target.value;}})));
+  body.appendChild(mkField('Target date',el('input',{class:'ibox',type:'date',value:f.date,onchange:(e)=>f.date=e.target.value})));
+  body.appendChild(mkField('Linked account',mkSel([['','— none —'],...S.accounts.map(a=>[a.id,a.name])],f.acc,(v)=>f.acc=v||null)));
+  body.appendChild(mkField('Priority',mkSel([['1','1 — Critical'],['2','2 — High'],['3','3 — Normal'],['4','4 — Low']],String(f.pri),(v)=>f.pri=Number(v))));
+  body.appendChild(el('button',{class:'submit',onclick:async()=>{
+    if(!f.name||!f.amt){toast('Name + amount required');return;}
+    const pay={user_id:S.session.user.id,name:f.name,target_amount:Number(f.amt),currency:S.currency,target_date:f.date||null,linked_account_id:f.acc,priority:f.pri};
+    const {error}=ex?await sb.from('goals').update(pay).eq('id',ex.id):await sb.from('goals').insert(pay);
+    if(error){toast('Error: '+error.message);return;}
+    close();await loadAll();toast(ex?'Updated':'Goal created');
+  }},'Save goal'));
+  if(ex) body.appendChild(el('button',{class:'btn-g btn-d',style:{width:'100%',marginTop:'8px'},onclick:async()=>{
+    if(!confirm('Mark complete?')) return;await sb.from('goals').update({is_complete:true}).eq('id',ex.id);close();await loadAll();toast('Goal complete 🎯');
+  }},'Mark complete'));
+  ni.focus();
+}
+
+// ── RECURRING SHEET ──────────────────────────────────────────
+function openRecurring(ex=null){
+  const tmpl=ex?.template||{};
+  const f={name:ex?.name||'',cad:ex?.cadence||'monthly',dir:tmpl.direction||'out',
+    amt:tmpl.amount?String(tmpl.amount):'',acc:tmpl.account_id||S.accounts[0]?.id,
+    cat:tmpl.category_id||null,axis:tmpl.axis||null,note:tmpl.note||''};
+  const {body,close}=mkSheet((ex?'Edit':'New')+' recurring');
+  const ni=el('input',{class:'ibox',placeholder:'e.g. Rent',value:f.name,oninput:(e)=>f.name=e.target.value}); body.appendChild(mkField('Name',ni));
+  body.appendChild(mkField('Cadence',mkSel([['daily','Daily'],['weekly','Weekly'],['biweekly','Biweekly'],['monthly','Monthly'],['quarterly','Quarterly'],['annual','Annual']],f.cad,(v)=>f.cad=v)));
+  body.appendChild(mkField('Direction',mkSel([['out','Out (expense)'],['in','In (income)']],f.dir,(v)=>f.dir=v)));
+  body.appendChild(mkField('Amount',el('input',{class:'ibox',type:'text',inputmode:'decimal',placeholder:'0',value:f.amt,oninput:(e)=>{e.target.value=e.target.value.replace(/[^\d.]/g,'');f.amt=e.target.value;}})));
+  body.appendChild(mkField('Account',mkSel(S.accounts.map(a=>[a.id,a.name]),f.acc,(v)=>f.acc=v)));
+  body.appendChild(mkField('Category',mkSel([['','— none —'],...S.categories.filter(c=>!c.is_income).map(c=>[c.id,c.name])],f.cat,(v)=>f.cat=v||null)));
+  body.appendChild(mkField('Axis',mkSel([['','—'],['INVEST','INVEST'],['PROTECT','PROTECT'],['SUSTAIN','SUSTAIN'],['LEAK','LEAK']],f.axis,(v)=>f.axis=v||null)));
+  body.appendChild(mkField('Note',el('input',{class:'ibox',placeholder:'optional',value:f.note,oninput:(e)=>f.note=e.target.value})));
+  body.appendChild(el('button',{class:'submit',onclick:async()=>{
+    if(!f.name||!f.amt){toast('Name + amount required');return;}
+    const acc=S.accounts.find(a=>a.id===f.acc);
+    const tmpl2={amount:Number(f.amt),currency:acc?.currency||S.currency,direction:f.dir,account_id:f.acc,category_id:f.cat,axis:f.axis,note:f.note||null};
+    const pay={user_id:S.session.user.id,name:f.name,cadence:f.cad,auto_post:false,template:tmpl2,is_active:true,
+      next_run:f.cad==='monthly'?dISO(new Date(todayL().getFullYear(),todayL().getMonth()+1,1)):dISO(addD(todayL(),1))};
+    const {error}=ex?await sb.from('recurring').update(pay).eq('id',ex.id):await sb.from('recurring').insert(pay);
+    if(error){toast('Error: '+error.message);return;}
+    close();await loadAll();toast(ex?'Updated':'Recurring created');
+  }},'Save recurring'));
+  if(ex) body.appendChild(el('button',{class:'btn-g btn-d',style:{width:'100%',marginTop:'8px'},onclick:async()=>{
+    if(!confirm('Deactivate?')) return;await sb.from('recurring').update({is_active:false}).eq('id',ex.id);close();await loadAll();toast('Deactivated');
+  }},'Deactivate'));
+  ni.focus();
+}
+
+// ── ACCOUNT SHEET ────────────────────────────────────────────
+function openAccount(ex=null){
+  const f={name:ex?.name||'',inst:ex?.institution||'',kind:ex?.kind||'operating',
+    cur:ex?.currency||'KES',bal:ex?.opening_balance?String(ex.opening_balance):'0',
+    color:ex?.color||'#10b981',ord:ex?.sort_order||99};
+  const {body,close}=mkSheet((ex?'Edit':'New')+' account');
+  const ni=el('input',{class:'ibox',placeholder:'e.g. KCB Operating',value:f.name,oninput:(e)=>f.name=e.target.value}); body.appendChild(mkField('Name',ni));
+  body.appendChild(mkField('Institution',el('input',{class:'ibox',placeholder:'e.g. KCB',value:f.inst,oninput:(e)=>f.inst=e.target.value})));
+  body.appendChild(mkField('Kind',mkSel([['operating','Operating'],['buffer','Buffer'],['compound','Compound/MMF'],['speculation','Speculation'],['cash','Cash'],['credit','Credit'],['wallet','Wallet']],f.kind,(v)=>f.kind=v)));
+  body.appendChild(mkField('Currency',mkSel([['KES','KES'],['USD','USD'],['EUR','EUR'],['GBP','GBP']],f.cur,(v)=>f.cur=v)));
+  body.appendChild(mkField(ex?'Opening balance (set once)':'Opening balance',el('input',{class:'ibox',type:'text',inputmode:'decimal',placeholder:'0',value:f.bal,oninput:(e)=>{e.target.value=e.target.value.replace(/[^\d.-]/g,'');f.bal=e.target.value;}})));
+  // Color
+  const cw=el('div',{style:{display:'flex',gap:'8px',flexWrap:'wrap'}});
+  for(const c of['#10b981','#3b82f6','#8b5cf6','#f59e0b','#6b7280','#ef4444','#0ea5e9','#d4ff00']){
+    const dot=el('button',{style:{width:'28px',height:'28px',borderRadius:'50%',background:c,
+      border:f.color===c?'2px solid var(--ink)':'2px solid transparent',transition:'border .12s'},
+      onclick:()=>{f.color=c;cw.querySelectorAll('button').forEach(b=>b.style.border='2px solid transparent');dot.style.border='2px solid var(--ink)';}});
+    cw.appendChild(dot);
+  }
+  body.appendChild(mkField('Colour',cw));
+  body.appendChild(el('button',{class:'submit',onclick:async()=>{
+    if(!f.name){toast('Name required');return;}
+    const pay={user_id:S.session.user.id,name:f.name,institution:f.inst||null,kind:f.kind,
+      currency:f.cur,opening_balance:Number(f.bal)||0,color:f.color,sort_order:f.ord,opening_date:dISO(todayL())};
+    const {error}=ex?await sb.from('accounts').update(pay).eq('id',ex.id):await sb.from('accounts').insert(pay);
+    if(error){toast('Error: '+error.message);return;}
+    close();await loadAll();await refreshSnaps();toast(ex?'Updated':'Account created');
+  }},'Save account'));
+  if(ex) body.appendChild(el('button',{class:'btn-g btn-d',style:{width:'100%',marginTop:'8px'},onclick:async()=>{
+    if(!confirm('Archive?')) return;await sb.from('accounts').update({is_archived:true}).eq('id',ex.id);close();await loadAll();toast('Archived');
+  }},'Archive'));
+  ni.focus();
+}
+
+// ── AUTH ─────────────────────────────────────────────────────
+function vAuth(){
+  const root=el('div',{class:'auth'}); const card=el('div',{class:'auth-card'});
+  card.appendChild(el('h1',{},'ledger',el('span',{class:'os'},' os')));
+  card.appendChild(el('div',{class:'tag'},'A personal operating system for money.'));
+  card.appendChild(el('div',{class:'hr'}));
+  if(!sb){
+    card.appendChild(el('label',{},'Supabase project URL'));
+    const ui=el('input',{class:'ibox',placeholder:'https://xxxx.supabase.co',style:{marginBottom:'12px'}}); card.appendChild(ui);
+    card.appendChild(el('label',{},'Supabase anon key'));
+    const ki=el('input',{class:'ibox',placeholder:'eyJhbGciOi…',style:{marginBottom:'16px'}}); card.appendChild(ki);
+    const msg=el('div',{class:'msg'});
+    card.appendChild(el('button',{class:'submit',onclick:()=>{
+      if(!ui.value.trim()||!ki.value.trim()){msg.textContent='Both required';return;}
+      localStorage.setItem('ledger:url',ui.value.trim());localStorage.setItem('ledger:anon',ki.value.trim());
+      CFG.URL=ui.value.trim();CFG.ANON=ki.value.trim();initSb();render();
+    }},'Connect'));
+    card.appendChild(msg);
+  } else {
+    card.appendChild(el('label',{},'Email'));
+    const ei=el('input',{class:'ibox',type:'email',autocomplete:'email',placeholder:'you@domain'}); card.appendChild(ei);
+    const msg=el('div',{class:'msg'});
+    const btn=el('button',{class:'submit',style:{marginTop:'14px'},onclick:async()=>{
+      const email=ei.value.trim();if(!email){msg.textContent='Email required';return;}
+      btn.disabled=true;btn.innerHTML='<span class="spinner"></span>';
+      const {error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:location.href}});
+      btn.disabled=false;btn.textContent='Send magic link';
+      msg.textContent=error?error.message:'Magic link sent. Check your inbox.';
+    }},'Send magic link');
+    card.appendChild(btn);card.appendChild(msg);
+    card.appendChild(el('div',{class:'msg',style:{marginTop:'24px',color:'var(--ink-4)'}},'v2.0 · Phase 2',el('br'),
+      el('button',{style:{color:'var(--ink-3)',textDecoration:'underline',fontSize:'11px',marginTop:'8px',fontFamily:'var(--mono)'},
+        onclick:()=>{localStorage.removeItem('ledger:url');localStorage.removeItem('ledger:anon');location.reload();}},'reset config')));
+  }
+  root.appendChild(card);return root;
+}
+
+// ── SEED ────────────────────────────────────────────────────
+async function seed(){
+  if(!sb||!S.session) return;
+  toast('Seeding…');
+  const {error}=await sb.rpc('seed_starter',{p_user:S.session.user.id});
+  if(error){toast('Seed failed: '+error.message);return;}
+  toast('Seeded.');await loadAll();
+}
+
+// ── BOOT ────────────────────────────────────────────────────
+async function boot(){
+  render();
+  if(!sb) return;
+  const {data:{session}}=await sb.auth.getSession();
+  if(session){S.session=session;await loadAll();}else render();
+  sb.auth.onAuthStateChange(async(_,sess)=>{S.session=sess;if(sess) await loadAll(); else render();});
+  window.addEventListener('online', ()=>{S.online=true;render();drainQ();});
+  window.addEventListener('offline',()=>{S.online=false;render();});
+  if('serviceWorker'in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+}
+boot();
+</script>
+</body>
+</html>

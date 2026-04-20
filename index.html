@@ -57,6 +57,35 @@ select option{background:var(--bg-2);color:var(--ink)}
   padding:3px 9px;font-family:var(--mono);font-size:10px;color:var(--ink-3);
   cursor:pointer;letter-spacing:.06em;transition:all .15s}
 .mask-btn:hover{border-color:var(--accent);color:var(--accent)}
+.nw-lock{display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
+.nw-lock-val{font-family:var(--mono);font-weight:800;font-size:46px;letter-spacing:-.04em;
+  line-height:1;filter:blur(12px);transition:filter .3s}
+.nw-lock-val.revealed{filter:blur(0)}
+.nw-lock-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;
+  border:1px solid var(--line-2);border-radius:4px;font-family:var(--mono);
+  font-size:10px;color:var(--ink-3);letter-spacing:.06em;margin-top:8px;
+  cursor:pointer;transition:all .2s;width:fit-content}
+.nw-lock-badge:hover{border-color:var(--accent);color:var(--accent)}
+.nw-lock-badge .lock-icon{font-size:12px}
+.pin-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);
+  z-index:200;display:flex;align-items:center;justify-content:center}
+.pin-box{background:var(--bg-1);border:1px solid var(--line-2);border-radius:12px;
+  padding:28px 24px;width:280px;text-align:center}
+.pin-title{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-3);margin-bottom:20px}
+.pin-dots{display:flex;justify-content:center;gap:12px;margin-bottom:24px}
+.pin-dot{width:12px;height:12px;border-radius:50%;background:var(--bg-2);
+  border:1px solid var(--line-2);transition:all .15s}
+.pin-dot.filled{background:var(--accent);border-color:var(--accent);box-shadow:0 0 8px var(--accent)}
+.pin-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pin-key{padding:16px 8px;background:var(--bg-2);border:1px solid var(--line);
+  border-radius:8px;font-family:var(--mono);font-size:18px;font-weight:700;
+  color:var(--ink);cursor:pointer;transition:all .12s;text-align:center}
+.pin-key:active{background:var(--bg-3);transform:scale(.94)}
+.pin-key.wide{grid-column:span 2}
+.pin-key.del{color:var(--ink-3);font-size:14px}
+.pin-err{font-family:var(--mono);font-size:11px;color:var(--leak);margin-top:8px;min-height:16px;
+  animation:fadeUp .2s ease}
 main{flex:1;padding:18px 18px 120px;max-width:1440px;margin:0 auto;width:100%}
 /* BOTTOM NAV */
 .bottomnav{position:fixed;bottom:0;left:0;right:0;display:grid;grid-template-columns:repeat(6,1fr);
@@ -352,6 +381,7 @@ const S = {
   kpis:{ spentD:0, inD:0, spentW:0, spentM:0, leakPct:0, savingsRate:0, runway:null },
   online:navigator.onLine, qc:0, currency:'KES',
   masked: localStorage.getItem('ledger:masked')==='1',
+  nwLocked: localStorage.getItem('ledger:nwlocked')!=='0', // NW hidden by default until confirmed
   lu: JSON.parse(localStorage.getItem('ledger:lu')||'{}'),
 };
 
@@ -676,9 +706,29 @@ function vToday(){
     el('div',{class:'lbl'},'Net worth'),
     el('div',{class:'ts'},now.toLocaleString('en-GB',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}).toUpperCase())
   ));
-  const nwEl=el('div',{class:'nw'+(S.masked?' masked':'')},
-    el('span',{class:'cur'},S.currency),S.masked?'••••••':fmtX(S.nw));
-  hero.appendChild(nwEl);
+  // NW display — blur + PIN lock unless revealed this session
+  const nwWrap=el('div',{});
+  const nwRow=el('div',{style:{display:'flex',alignItems:'baseline',gap:'0',marginTop:'8px',lineHeight:'1'}});
+  const nwCur=el('span',{class:'cur'},S.currency);
+  const nwNum=el('div',{class:'nw-lock-val'+((!S.nwLocked&&!S.masked)?' revealed':'')},
+    S.masked?'••••••':fmtX(S.nw));
+  nwRow.appendChild(nwCur);
+  nwRow.appendChild(nwNum);
+  nwWrap.appendChild(nwRow);
+  // Lock badge — tap to open PIN
+  if(S.nwLocked&&!S.masked){
+    const badge=el('div',{class:'nw-lock-badge',onclick:()=>openPinModal()},
+      el('span',{class:'lock-icon'},'🔒'),
+      'Tap to reveal net worth');
+    nwWrap.appendChild(badge);
+  } else if(!S.masked){
+    // Show re-lock option
+    const badge=el('div',{class:'nw-lock-badge',onclick:()=>{
+      S.nwLocked=true;localStorage.setItem('ledger:nwlocked','1');render();
+    }},el('span',{class:'lock-icon'},'🔓'),'Lock net worth');
+    nwWrap.appendChild(badge);
+  }
+  hero.appendChild(nwWrap);
   if(S.nwHist.length>=2) hero.appendChild(spark(S.nwHist.map(x=>x.nw),240,32));
   hero.appendChild(el('div',{class:'delta'},
     el('span',{class:'mono'},'TODAY '),
@@ -1541,6 +1591,82 @@ async function seed(){
   const {error}=await sb.rpc('seed_starter',{p_user:S.session.user.id});
   if(error){toast('Seed failed: '+error.message);return;}
   toast('Seeded.');await loadAll();
+}
+
+// ── PIN MODAL ────────────────────────────────────────────────
+function openPinModal(){
+  const STORED=localStorage.getItem('ledger:pin')||'';
+  const isSet=STORED.length===4;
+  let entry='';
+  let mode=isSet?'enter':'set'; // 'set'=create new, 'enter'=verify existing, 'confirm'=re-enter for set
+  let firstEntry='';
+
+  const overlay=el('div',{class:'pin-overlay',onclick:(e)=>{if(e.target===overlay) close();}});
+  const box=el('div',{class:'pin-box'});
+  const title=el('div',{class:'pin-title'},isSet?'Enter PIN to reveal':'Create a 4-digit PIN');
+  const dotsWrap=el('div',{class:'pin-dots'});
+  const dots=[0,1,2,3].map(()=>{const d=el('div',{class:'pin-dot'});dotsWrap.appendChild(d);return d;});
+  const err=el('div',{class:'pin-err'});
+  const grid=el('div',{class:'pin-grid'});
+
+  box.appendChild(title);box.appendChild(dotsWrap);box.appendChild(err);box.appendChild(grid);
+  overlay.appendChild(box);document.body.appendChild(overlay);
+
+  function refresh(){
+    dots.forEach((d,i)=>d.classList.toggle('filled',i<entry.length));
+    err.textContent='';
+  }
+
+  function press(n){
+    if(entry.length>=4) return;
+    entry+=n;
+    refresh();
+    if(entry.length===4) setTimeout(submit,120);
+  }
+
+  function del(){entry=entry.slice(0,-1);refresh();}
+
+  function submit(){
+    if(mode==='enter'){
+      if(entry===STORED){
+        S.nwLocked=false;
+        localStorage.setItem('ledger:nwlocked','0');
+        close();render();
+      } else {
+        err.textContent='Incorrect PIN';
+        entry='';refresh();
+      }
+    } else if(mode==='set'){
+      firstEntry=entry;entry='';
+      mode='confirm';
+      title.textContent='Confirm PIN';
+      refresh();
+    } else if(mode==='confirm'){
+      if(entry===firstEntry){
+        localStorage.setItem('ledger:pin',entry);
+        S.nwLocked=false;
+        localStorage.setItem('ledger:nwlocked','0');
+        close();render();
+      } else {
+        err.textContent='PINs do not match — try again';
+        entry='';firstEntry='';mode='set';
+        title.textContent='Create a 4-digit PIN';
+        refresh();
+      }
+    }
+  }
+
+  // Number keys 1–9
+  for(let i=1;i<=9;i++){
+    const k=el('button',{class:'pin-key',onclick:()=>press(String(i))},String(i));
+    grid.appendChild(k);
+  }
+  // Bottom row: del, 0, ok
+  grid.appendChild(el('button',{class:'pin-key del',onclick:del},'⌫'));
+  grid.appendChild(el('button',{class:'pin-key',onclick:()=>press('0')},'0'));
+  grid.appendChild(el('button',{class:'pin-key',style:{color:'var(--accent)'},onclick:()=>{if(entry.length===4)submit();}},'OK'));
+
+  function close(){overlay.remove();}
 }
 
 // ── AUTH TOKEN HANDLER ───────────────────────────────────────

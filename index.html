@@ -112,15 +112,21 @@ main{flex:1;padding:18px 18px 120px;max-width:1440px;margin:0 auto;width:100%}
 /* KPI */
 .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
 .kpi{padding:14px 12px;background:var(--bg-1);border:1px solid var(--line);border-radius:6px;
-  position:relative;overflow:hidden;animation:fadeUp .3s ease both;transition:border-color .2s}
+  position:relative;overflow:hidden;animation:fadeUp .3s ease both;transition:border-color .2s,box-shadow .2s}
 .kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;
   background:linear-gradient(90deg,transparent,var(--accent-line,var(--line-2)),transparent);opacity:.6}
-.kpi:hover{border-color:var(--line-2)}
+.kpi:hover{border-color:var(--line-2);box-shadow:0 2px 12px rgba(0,0,0,.3)}
 .kpi .l{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
-.kpi .v{font-family:var(--mono);font-weight:700;font-size:22px;margin-top:8px;letter-spacing:-.03em;
+.kpi .v{font-family:var(--mono);font-weight:700;font-size:20px;margin-top:8px;letter-spacing:-.03em;
   animation:countUp .4s cubic-bezier(.22,1,.36,1) both}
-.kpi .sub{font-family:var(--mono);font-size:9px;color:var(--ink-4);margin-top:3px}
+.kpi .sub{font-family:var(--mono);font-size:9px;color:var(--ink-4);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .kpi.masked .v{letter-spacing:.2em;color:var(--ink-4)}
+@media(max-width:899px){
+  .kpis[style*="repeat(4"]{grid-template-columns:repeat(2,1fr)!important}
+}
+@media(min-width:900px){
+  .kpis[style*="repeat(4"]{grid-template-columns:repeat(4,1fr)!important}
+}
 /* TX ROW */
 .txgl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-4);margin:16px 2px 6px}
 .tx{display:grid;grid-template-columns:3px 1fr auto 24px;gap:12px;align-items:center;
@@ -441,110 +447,146 @@ async function loadSnaps(uid){
 function compute(){
   const now=todayL();
   const amt=t=>Number(t.amount_primary||t.amount||0);
-  // Real income/expense = has no counter_account_id (not a transfer leg)
-  const isReal=t=>!t.counter_account_id;
-  // Investment account kinds
-  const investKinds=['compound','speculation'];
-  const liquidKinds=['operating','buffer','cash'];
-  const investAccIds=new Set(S.accounts.filter(a=>investKinds.includes(a.kind)).map(a=>a.id));
-  const liquidAccIds=new Set(S.accounts.filter(a=>liquidKinds.includes(a.kind)).map(a=>a.id));
 
-  // Axis rollup — real outflows only, exclude transfer legs
+  // ── ACCOUNT CLASSIFICATION ───────────────────────────────────
+  // Liquid: spendable cash — operating, buffer, cash
+  // Investment: assets that grow — compound (MMF), speculation (trading)
+  // Transfer leg: has counter_account_id — represents internal movement
+  const LIQUID   =['operating','buffer','cash'];
+  const INVEST   =['compound','speculation'];
+  const isLiquid =a=>LIQUID.includes(a.kind);
+  const isInvest =a=>INVEST.includes(a.kind);
+  const liquidIds=new Set(S.accounts.filter(isLiquid).map(a=>a.id));
+  const investIds=new Set(S.accounts.filter(isInvest).map(a=>a.id));
+
+  // A real income/expense has NO counter_account_id (not a transfer leg)
+  const isReal=t=>!t.counter_account_id;
+  // A transfer: has counter_account_id
+  const isXfer=t=>!!t.counter_account_id;
+
+  // ── AXIS ROLLUP (real outflows only, axis-tagged) ─────────────
   function axRoll(txs){
     const r={I:0,P:0,Su:0,L:0};
     for(const t of txs){
       if(t.direction!=='out'||!isReal(t)||!t.axis) continue;
       const a=amt(t);
-      if(t.axis==='INVEST')r.I+=a; else if(t.axis==='PROTECT')r.P+=a;
-      else if(t.axis==='SUSTAIN')r.Su+=a; else r.L+=a;
+      if(t.axis==='INVEST')r.I+=a;
+      else if(t.axis==='PROTECT')r.P+=a;
+      else if(t.axis==='SUSTAIN')r.Su+=a;
+      else r.L+=a;
     }
     return r;
   }
-  S.axT=axRoll(S.txToday); S.axW=axRoll(S.txWeek); S.axM=axRoll(S.txMonth);
+  S.axT=axRoll(S.txToday);
+  S.axW=axRoll(S.txWeek);
+  S.axM=axRoll(S.txMonth);
 
-  // Basic KPIs — real income/expense, no transfers
-  const sumOut=txs=>txs.filter(t=>t.direction==='out'&&isReal(t)).reduce((s,t)=>s+amt(t),0);
-  const sumIn =txs=>txs.filter(t=>t.direction==='in' &&isReal(t)).reduce((s,t)=>s+amt(t),0);
-  S.kpis.spentD=sumOut(S.txToday); S.kpis.inD=sumIn(S.txToday);
-  S.kpis.spentW=sumOut(S.txWeek);
+  // ── BASIC SPEND / INCOME (real only, no transfer legs) ────────
+  const realOut=txs=>txs.filter(t=>t.direction==='out'&&isReal(t)).reduce((s,t)=>s+amt(t),0);
+  const realIn =txs=>txs.filter(t=>t.direction==='in' &&isReal(t)).reduce((s,t)=>s+amt(t),0);
+  S.kpis.spentD=realOut(S.txToday);
+  S.kpis.inD   =realIn(S.txToday);
+  S.kpis.spentW=realOut(S.txWeek);
 
-  // Burn = axis-tagged real expenses only (INVEST/PROTECT/SUSTAIN/LEAK)
-  const realExpM=S.txMonth.filter(t=>t.direction==='out'&&isReal(t)&&t.axis!=null);
-  S.kpis.spentM=realExpM.reduce((s,t)=>s+amt(t),0);
+  // ── BURN RATE (SUSTAIN + LEAK only — true consumptive spend) ──
+  // INVEST and PROTECT axis expenses are deployed capital, not burn
+  // Burn drives runway — if you invest more, runway should NOT collapse
+  const burnTxM=S.txMonth.filter(t=>t.direction==='out'&&isReal(t)&&
+    (t.axis==='SUSTAIN'||t.axis==='LEAK'));
+  const burnM=burnTxM.reduce((s,t)=>s+amt(t),0);
+  S.kpis.spentM=realOut(S.txMonth); // total real spend for display
+  S.kpis.burnM =burnM;              // pure consumptive burn for runway
+  const daysElapsed=Math.max(1,now.getDate());
+  const dailyBurn=burnM/daysElapsed;
+  S.kpis.dailyBurn=dailyBurn;
 
+  // Leak %
   const totD=S.axT.I+S.axT.P+S.axT.Su+S.axT.L;
   S.kpis.leakPct=totD>0?(S.axT.L/totD)*100:0;
 
-  // ── SAVE RATE ─────────────────────────────────────────────────
-  // Numerator: INVEST+PROTECT axis expenses + transfers OUT from liquid TO investment accounts
-  const axisInvest=S.axM.I+S.axM.P;
-  // Transfers to investment accounts this month (out from liquid, in to investment)
-  const transfersToInvest=S.txMonth.filter(t=>
-    t.direction==='out' &&
-    t.counter_account_id &&
-    liquidAccIds.has(t.account_id) &&
-    investAccIds.has(t.counter_account_id)
+  // ── RUNWAY (liquid balance ÷ daily consumptive burn) ──────────
+  // Liquid balance computed from opening + ALL tx flows on liquid accounts
+  // Transfers OUT of liquid (to invest) correctly reduce liquid balance
+  // Transfers IN to liquid (from invest) correctly increase it
+  // This is snapshot-independent — no stale data
+  const liq=S.accounts.filter(isLiquid).reduce((sum,a)=>{
+    const net=S.txYear.filter(t=>t.account_id===a.id).reduce((s,t)=>{
+      if(t.direction==='in' ) return s+amt(t); // both real income and transfer-in
+      if(t.direction==='out') return s-amt(t); // both real expense and transfer-out
+      return s;
+    },0);
+    return sum+Number(a.opening_balance||0)+net;
+  },0);
+  S.kpis.liqBal=liq;
+  // Runway = liquid ÷ daily burn (not daily total spend)
+  // If burn=0 (all INVEST/PROTECT), runway is effectively infinite → show ∞
+  S.kpis.runway=dailyBurn>0?Math.round(liq/dailyBurn):liq>0?9999:null;
+
+  // ── INVEST RATE (% of all cash deployed to investments) ───────
+  // Numerator: transfers from liquid→invest + INVEST axis expenses
+  const xferToInvest=S.txMonth.filter(t=>
+    t.direction==='out'&&isXfer(t)&&
+    liquidIds.has(t.account_id)&&investIds.has(t.counter_account_id)
   ).reduce((s,t)=>s+amt(t),0);
-  // Denominator: real income + transfers to invest (deployed capital counts as "saved")
-  const realIncomeM=sumIn(S.txMonth);
-  // Include direct income to investment accounts flagged countIncome
+  const directInvest=S.axM.I; // INVEST-tagged real expenses (e.g. USMLE fees, trading capital)
+  const totalDeployed=xferToInvest+directInvest;
+  S.kpis.deployedM=totalDeployed;
+  S.kpis.xferToInvest=xferToInvest;
+
+  // ── SAVE RATE (deployed to future / total income) ─────────────
+  // Income = real incoming transactions on any account
+  const incomeM=realIn(S.txMonth);
+  // Also include P&L / dividends arriving directly into invest accounts
   const accMetaAll=JSON.parse(localStorage.getItem('ledger:accmeta')||'{}');
   const countIncomeIds=new Set(
-    S.accounts.filter(a=>investKinds.includes(a.kind)&&accMetaAll[a.id]?.countIncome).map(a=>a.id)
+    S.accounts.filter(a=>isInvest(a)&&accMetaAll[a.id]?.countIncome).map(a=>a.id)
   );
-  const investIncomeM=S.txMonth.filter(t=>
+  const investDirectIncome=S.txMonth.filter(t=>
     t.direction==='in'&&isReal(t)&&countIncomeIds.has(t.account_id)
   ).reduce((s,t)=>s+amt(t),0);
-  const totalIncome=realIncomeM+investIncomeM;
-  const deployed=axisInvest+transfersToInvest;
-  S.kpis.savingsRate=totalIncome>0?(deployed/totalIncome)*100:0;
+  const totalIncome=incomeM+investDirectIncome;
+  // Save = INVEST+PROTECT deployed (axis) + transfers to investment accounts
+  const savedM=S.axM.I+S.axM.P+xferToInvest;
+  S.kpis.incomeM=totalIncome;
+  S.kpis.savingsRate=totalIncome>0?(savedM/totalIncome)*100:0;
+  S.kpis.investRate=totalIncome>0?(totalDeployed/totalIncome)*100:0;
 
-  // ── NET WORTH — snapshots for display (accurate to last refresh) ──
+  // ── NET WORTH (snapshots for display) ─────────────────────────
   S.nw=S.accounts.reduce((s,a)=>{
     const sn=S.snapshots[a.id];
     return s+Number(sn?sn.balance_primary:a.opening_balance||0);
   },0);
 
-  // ── RUNWAY — computed purely from transactions, snapshot-independent ──
-  // Liquid balance = opening + real non-transfer in/out on liquid accounts this year
-  const liq=S.accounts.filter(a=>liquidKinds.includes(a.kind)).reduce((sum,a)=>{
-    const accTx=S.txYear.filter(t=>t.account_id===a.id);
-    const net=accTx.reduce((s,t)=>{
-      if(t.direction==='in'  && isReal(t)) return s+amt(t);
-      if(t.direction==='out' && isReal(t)) return s-amt(t);
-      // transfer in to this liquid account (money arriving)
-      if(t.direction==='in'  && t.counter_account_id) return s+amt(t);
-      // transfer out from this liquid account (money leaving)
-      if(t.direction==='out' && t.counter_account_id) return s-amt(t);
-      return s;
-    },0);
-    return sum+Number(a.opening_balance||0)+net;
-  },0);
-  // Daily burn = real axis-tagged expenses only, averaged over days elapsed this month
-  const dailyBurn=S.kpis.spentM/Math.max(1,now.getDate());
-  S.kpis.runway=dailyBurn>0?Math.round(liq/dailyBurn):null;
-
-  // ── WEEK DAYS chart ──
+  // ── WEEK DAYS (axis-tagged real expenses only) ─────────────────
   S.weekDays=[]; const ws=wkStart();
   for(let i=0;i<7;i++){
     const d=addD(ws,i),de=addD(d,1);
-    const tx=S.txYear.filter(t=>{const dt=new Date(t.occurred_at);return dt>=d&&dt<de&&t.direction==='out'&&isReal(t)&&t.axis;});
+    const tx=S.txYear.filter(t=>{
+      const dt=new Date(t.occurred_at);
+      return dt>=d&&dt<de&&t.direction==='out'&&isReal(t)&&t.axis;
+    });
     const r={date:d,label:dayL(d),I:0,P:0,Su:0,L:0,total:0};
     for(const t of tx){const a=amt(t);r.total+=a;
-      if(t.axis==='INVEST')r.I+=a;else if(t.axis==='PROTECT')r.P+=a;else if(t.axis==='SUSTAIN')r.Su+=a;else r.L+=a;}
+      if(t.axis==='INVEST')r.I+=a;
+      else if(t.axis==='PROTECT')r.P+=a;
+      else if(t.axis==='SUSTAIN')r.Su+=a;
+      else r.L+=a;
+    }
     S.weekDays.push(r);
   }
-  // ── MONTH HEATMAP ──
-  S.monthDays=[]; const ms=moStart();
+
+  // ── MONTH HEATMAP (real expenses only) ────────────────────────
+  S.monthDays=[]; const ms2=moStart();
   const dim=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
   for(let i=0;i<dim;i++){
-    const d=addD(ms,i),de=addD(d,1);
-    const tot=S.txYear.filter(t=>{const dt=new Date(t.occurred_at);return dt>=d&&dt<de&&t.direction==='out'&&isReal(t)&&t.axis;})
-      .reduce((s,t)=>s+amt(t),0);
+    const d=addD(ms2,i),de=addD(d,1);
+    const tot=S.txYear.filter(t=>{
+      const dt=new Date(t.occurred_at);
+      return dt>=d&&dt<de&&t.direction==='out'&&isReal(t)&&t.axis;
+    }).reduce((s,t)=>s+amt(t),0);
     S.monthDays.push({date:d,total:tot});
   }
 }
-
 // ── OFFLINE ──────────────────────────────────────────────────
 async function enqueueTx(payload){
   const lid=crypto.randomUUID();
@@ -627,33 +669,96 @@ function vShell(){
 function vToday(){
   const f=document.createDocumentFragment();
   const now=new Date();
+
+  // ── HERO ─────────────────────────────────────────────────────
   const hero=el('div',{class:'hero'});
   hero.appendChild(el('div',{class:'r1'},
     el('div',{class:'lbl'},'Net worth'),
     el('div',{class:'ts'},now.toLocaleString('en-GB',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}).toUpperCase())
   ));
-  const nwEl=el('div',{class:'nw'+(S.masked?' masked':'')},el('span',{class:'cur'},S.currency),S.masked?'••••••':fmtX(S.nw));
+  const nwEl=el('div',{class:'nw'+(S.masked?' masked':'')},
+    el('span',{class:'cur'},S.currency),S.masked?'••••••':fmtX(S.nw));
   hero.appendChild(nwEl);
   if(S.nwHist.length>=2) hero.appendChild(spark(S.nwHist.map(x=>x.nw),240,32));
-  hero.appendChild(el('div',{class:'delta'},el('span',{class:'mono'},'TODAY '),
-    el('span',{class:'dn'},'−'+fmt(S.kpis.spentD)),'  ',el('span',{class:'up'},'+'+fmt(S.kpis.inD))));
+  hero.appendChild(el('div',{class:'delta'},
+    el('span',{class:'mono'},'TODAY '),
+    el('span',{class:'dn'},'−'+fmt(S.kpis.spentD)),'  ',
+    el('span',{class:'up'},'+'+fmt(S.kpis.inD))));
   hero.appendChild(axBar(S.axT));
   f.appendChild(hero);
-  const kpis=el('div',{class:'kpis'});
-  kpis.appendChild(kpi('Today out',fmt(S.kpis.spentD),S.currency));
-  kpis.appendChild(kpi('Today in',fmt(S.kpis.inD),S.currency));
-  kpis.appendChild(kpi('Leak %',S.kpis.leakPct.toFixed(0)+'%','target <15%',S.kpis.leakPct>20?'var(--leak)':null));
-  kpis.appendChild(kpi('Week',fmt(S.kpis.spentW),S.currency));
-  kpis.appendChild(kpi('Runway',S.kpis.runway!=null?S.kpis.runway+'d':'—','days liquid',S.kpis.runway!=null&&S.kpis.runway<60?'var(--leak)':null));
-  kpis.appendChild(kpi('Save rate',S.kpis.savingsRate.toFixed(0)+'%','of month in'));
+
+  // ── BURN RATE INDICATOR ───────────────────────────────────────
+  // Shows daily burn vs daily income with a visual gauge
+  const k=S.kpis;
+  const dailyIncome=k.incomeM/Math.max(1,now.getDate());
+  const burnRatio=dailyIncome>0?k.dailyBurn/dailyIncome:k.dailyBurn>0?2:0;
+  const burnPct=Math.min(100,burnRatio*100);
+  const burnColor=burnRatio>0.8?'var(--leak)':burnRatio>0.5?'var(--sustain)':'var(--invest)';
+  const burnCard=el('div',{class:'card',style:{padding:'14px 16px',marginTop:'10px'}});
+  const burnHead=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:'10px'}});
+  burnHead.appendChild(el('div',{style:{fontFamily:'var(--mono)',fontSize:'10px',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--ink-3)'}},'Burn rate'));
+  const burnRight=el('div',{style:{fontFamily:'var(--mono)',fontSize:'11px',color:'var(--ink-3)',textAlign:'right'}});
+  burnRight.appendChild(el('span',{style:{fontSize:'18px',fontWeight:'800',color:burnColor,letterSpacing:'-.02em'}},
+    S.masked?'••••':fmt(k.dailyBurn)+'/d'));
+  burnRight.appendChild(el('span',{style:{marginLeft:'10px',color:'var(--ink-4)'}},
+    S.masked?'':' burn  ·  '+fmt(dailyIncome)+'/d income'));
+  burnHead.appendChild(burnRight);
+  burnCard.appendChild(burnHead);
+  // Gauge track
+  const track=el('div',{style:{height:'6px',background:'var(--bg-2)',borderRadius:'3px',overflow:'hidden',position:'relative'}});
+  const fill=el('div',{style:{
+    height:'100%',borderRadius:'3px',width:burnPct+'%',
+    background:burnColor,
+    transition:'width .4s ease',
+    boxShadow:'0 0 8px '+burnColor
+  }});
+  track.appendChild(fill);
+  burnCard.appendChild(track);
+  // Labels
+  const labels=el('div',{style:{display:'flex',justifyContent:'space-between',marginTop:'6px',
+    fontFamily:'var(--mono)',fontSize:'9px',color:'var(--ink-4)',letterSpacing:'.08em'}});
+  labels.appendChild(el('span',{},'SUSTAIN+LEAK only'));
+  labels.appendChild(el('span',{style:{color:burnColor}},
+    burnRatio>0?Math.round(burnRatio*100)+'% of income':'—'));
+  burnCard.appendChild(labels);
+  f.appendChild(burnCard);
+
+  // ── KPI GRID — 8 metrics, 2 rows ─────────────────────────────
+  const kpis=el('div',{class:'kpis',style:{gridTemplateColumns:'repeat(4,1fr)',marginTop:'10px'}});
+
+  // Row 1: spending / leak / income
+  kpis.appendChild(kpi('Burn/day',S.masked?'••••':fmt(k.dailyBurn),S.currency,burnColor));
+  kpis.appendChild(kpi('Leak %',k.leakPct.toFixed(0)+'%','target <15%',k.leakPct>20?'var(--leak)':k.leakPct<10?'var(--invest)':null));
+  kpis.appendChild(kpi('Month in',fmt(k.incomeM),S.currency));
+  kpis.appendChild(kpi('Week out',fmt(k.spentW),S.currency));
+
+  // Row 2: runway / save rate / invest / deployed
+  const runwayVal=k.runway===9999?'∞':k.runway!=null?k.runway+'d':'—';
+  const runwayColor=k.runway!=null&&k.runway!==9999&&k.runway<60?'var(--leak)':
+                    k.runway===9999?'var(--invest)':null;
+  kpis.appendChild(kpi('Runway',runwayVal,'days of cash',runwayColor));
+  kpis.appendChild(kpi('Save rate',k.savingsRate.toFixed(0)+'%','invest+protect+xfer',k.savingsRate>30?'var(--invest)':null));
+  kpis.appendChild(kpi('Invest rate',k.investRate.toFixed(0)+'%','deployed to assets',k.investRate>20?'var(--invest)':null));
+  kpis.appendChild(kpi('Deployed',fmt(k.deployedM),S.currency+' this month',k.deployedM>0?'var(--invest)':null));
+
   f.appendChild(kpis);
+
+  // ── TRANSACTION LIST ─────────────────────────────────────────
   f.appendChild(sHead('Ledger · Today',S.txToday.length+' entries'));
-  if(!S.txToday.length){ f.appendChild(el('div',{class:'card empty'},el('div',{class:'big'},'Clean.'),el('div',{class:'sm'},'Tap + to log.'))); }
-  else{
+  if(!S.txToday.length){
+    f.appendChild(el('div',{class:'card empty'},
+      el('div',{class:'big'},'Clean.'),el('div',{class:'sm'},'Tap + to log.')));
+  } else {
     const bkts={Evening:[],Afternoon:[],Morning:[]};
-    for(const t of S.txToday){const h=new Date(t.occurred_at).getHours();bkts[h>=17?'Evening':h>=12?'Afternoon':'Morning'].push(t);}
-    for(const lb of ['Evening','Afternoon','Morning']){ if(!bkts[lb].length) continue;
-      f.appendChild(el('div',{class:'txgl'},lb)); for(const t of bkts[lb]) f.appendChild(txR(t)); }
+    for(const t of S.txToday){
+      const h=new Date(t.occurred_at).getHours();
+      bkts[h>=17?'Evening':h>=12?'Afternoon':'Morning'].push(t);
+    }
+    for(const lb of ['Evening','Afternoon','Morning']){
+      if(!bkts[lb].length) continue;
+      f.appendChild(el('div',{class:'txgl'},lb));
+      for(const t of bkts[lb]) f.appendChild(txR(t));
+    }
   }
   return f;
 }

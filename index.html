@@ -439,57 +439,110 @@ async function loadSnaps(uid){
 }
 
 function compute(){
-  // Exclude transfers (counter_account_id set) from all spend calculations
-  const sumOut=(txs)=>txs.filter(t=>t.direction==='out'&&!t.counter_account_id).reduce((s,t)=>s+Number(t.amount_primary||t.amount||0),0);
-  const sumIn =(txs)=>txs.filter(t=>t.direction==='in' &&!t.counter_account_id).reduce((s,t)=>s+Number(t.amount_primary||t.amount||0),0);
-  function axRoll(txs){ const r={I:0,P:0,Su:0,L:0};
-    for(const t of txs) if(t.direction==='out'&&t.axis){const a=Number(t.amount_primary||t.amount||0);
-      if(t.axis==='INVEST')r.I+=a; else if(t.axis==='PROTECT')r.P+=a; else if(t.axis==='SUSTAIN')r.Su+=a; else r.L+=a;} return r; }
+  const now=todayL();
+  const amt=t=>Number(t.amount_primary||t.amount||0);
+  // Real income/expense = has no counter_account_id (not a transfer leg)
+  const isReal=t=>!t.counter_account_id;
+  // Investment account kinds
+  const investKinds=['compound','speculation'];
+  const liquidKinds=['operating','buffer','cash'];
+  const investAccIds=new Set(S.accounts.filter(a=>investKinds.includes(a.kind)).map(a=>a.id));
+  const liquidAccIds=new Set(S.accounts.filter(a=>liquidKinds.includes(a.kind)).map(a=>a.id));
+
+  // Axis rollup — real outflows only, exclude transfer legs
+  function axRoll(txs){
+    const r={I:0,P:0,Su:0,L:0};
+    for(const t of txs){
+      if(t.direction!=='out'||!isReal(t)||!t.axis) continue;
+      const a=amt(t);
+      if(t.axis==='INVEST')r.I+=a; else if(t.axis==='PROTECT')r.P+=a;
+      else if(t.axis==='SUSTAIN')r.Su+=a; else r.L+=a;
+    }
+    return r;
+  }
   S.axT=axRoll(S.txToday); S.axW=axRoll(S.txWeek); S.axM=axRoll(S.txMonth);
+
+  // Basic KPIs — real income/expense, no transfers
+  const sumOut=txs=>txs.filter(t=>t.direction==='out'&&isReal(t)).reduce((s,t)=>s+amt(t),0);
+  const sumIn =txs=>txs.filter(t=>t.direction==='in' &&isReal(t)).reduce((s,t)=>s+amt(t),0);
   S.kpis.spentD=sumOut(S.txToday); S.kpis.inD=sumIn(S.txToday);
-  S.kpis.spentW=sumOut(S.txWeek); S.kpis.spentM=sumOut(S.txMonth);
+  S.kpis.spentW=sumOut(S.txWeek);
+
+  // Burn = axis-tagged real expenses only (INVEST/PROTECT/SUSTAIN/LEAK)
+  const realExpM=S.txMonth.filter(t=>t.direction==='out'&&isReal(t)&&t.axis!=null);
+  S.kpis.spentM=realExpM.reduce((s,t)=>s+amt(t),0);
+
   const totD=S.axT.I+S.axT.P+S.axT.Su+S.axT.L;
   S.kpis.leakPct=totD>0?(S.axT.L/totD)*100:0;
-  const inM=sumIn(S.txMonth);
-  S.kpis.savingsRate=inM>0?((S.axM.I+S.axM.P)/inM)*100:0;
-  S.nw=S.accounts.reduce((s,a)=>{ const sn=S.snapshots[a.id]; return s+Number(sn?sn.balance_primary:a.opening_balance||0); },0);
-  // Week days
+
+  // ── SAVE RATE ─────────────────────────────────────────────────
+  // Numerator: INVEST+PROTECT axis expenses + transfers OUT from liquid TO investment accounts
+  const axisInvest=S.axM.I+S.axM.P;
+  // Transfers to investment accounts this month (out from liquid, in to investment)
+  const transfersToInvest=S.txMonth.filter(t=>
+    t.direction==='out' &&
+    t.counter_account_id &&
+    liquidAccIds.has(t.account_id) &&
+    investAccIds.has(t.counter_account_id)
+  ).reduce((s,t)=>s+amt(t),0);
+  // Denominator: real income + transfers to invest (deployed capital counts as "saved")
+  const realIncomeM=sumIn(S.txMonth);
+  // Include direct income to investment accounts flagged countIncome
+  const accMetaAll=JSON.parse(localStorage.getItem('ledger:accmeta')||'{}');
+  const countIncomeIds=new Set(
+    S.accounts.filter(a=>investKinds.includes(a.kind)&&accMetaAll[a.id]?.countIncome).map(a=>a.id)
+  );
+  const investIncomeM=S.txMonth.filter(t=>
+    t.direction==='in'&&isReal(t)&&countIncomeIds.has(t.account_id)
+  ).reduce((s,t)=>s+amt(t),0);
+  const totalIncome=realIncomeM+investIncomeM;
+  const deployed=axisInvest+transfersToInvest;
+  S.kpis.savingsRate=totalIncome>0?(deployed/totalIncome)*100:0;
+
+  // ── NET WORTH — snapshots for display (accurate to last refresh) ──
+  S.nw=S.accounts.reduce((s,a)=>{
+    const sn=S.snapshots[a.id];
+    return s+Number(sn?sn.balance_primary:a.opening_balance||0);
+  },0);
+
+  // ── RUNWAY — computed purely from transactions, snapshot-independent ──
+  // Liquid balance = opening + real non-transfer in/out on liquid accounts this year
+  const liq=S.accounts.filter(a=>liquidKinds.includes(a.kind)).reduce((sum,a)=>{
+    const accTx=S.txYear.filter(t=>t.account_id===a.id);
+    const net=accTx.reduce((s,t)=>{
+      if(t.direction==='in'  && isReal(t)) return s+amt(t);
+      if(t.direction==='out' && isReal(t)) return s-amt(t);
+      // transfer in to this liquid account (money arriving)
+      if(t.direction==='in'  && t.counter_account_id) return s+amt(t);
+      // transfer out from this liquid account (money leaving)
+      if(t.direction==='out' && t.counter_account_id) return s-amt(t);
+      return s;
+    },0);
+    return sum+Number(a.opening_balance||0)+net;
+  },0);
+  // Daily burn = real axis-tagged expenses only, averaged over days elapsed this month
+  const dailyBurn=S.kpis.spentM/Math.max(1,now.getDate());
+  S.kpis.runway=dailyBurn>0?Math.round(liq/dailyBurn):null;
+
+  // ── WEEK DAYS chart ──
   S.weekDays=[]; const ws=wkStart();
   for(let i=0;i<7;i++){
     const d=addD(ws,i),de=addD(d,1);
-    const tx=S.txYear.filter(t=>{const dt=new Date(t.occurred_at);return dt>=d&&dt<de&&t.direction==='out';});
+    const tx=S.txYear.filter(t=>{const dt=new Date(t.occurred_at);return dt>=d&&dt<de&&t.direction==='out'&&isReal(t)&&t.axis;});
     const r={date:d,label:dayL(d),I:0,P:0,Su:0,L:0,total:0};
-    for(const t of tx){const a=Number(t.amount_primary||t.amount||0);r.total+=a;
+    for(const t of tx){const a=amt(t);r.total+=a;
       if(t.axis==='INVEST')r.I+=a;else if(t.axis==='PROTECT')r.P+=a;else if(t.axis==='SUSTAIN')r.Su+=a;else r.L+=a;}
     S.weekDays.push(r);
   }
-  // Month days (heatmap)
-  S.monthDays=[]; const ms=moStart(); const now=todayL();
+  // ── MONTH HEATMAP ──
+  S.monthDays=[]; const ms=moStart();
   const dim=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
   for(let i=0;i<dim;i++){
     const d=addD(ms,i),de=addD(d,1);
-    const tot=S.txYear.filter(t=>{const dt=new Date(t.occurred_at);return dt>=d&&dt<de&&t.direction==='out';})
-      .reduce((s,t)=>s+Number(t.amount_primary||t.amount||0),0);
+    const tot=S.txYear.filter(t=>{const dt=new Date(t.occurred_at);return dt>=d&&dt<de&&t.direction==='out'&&isReal(t)&&t.axis;})
+      .reduce((s,t)=>s+amt(t),0);
     S.monthDays.push({date:d,total:tot});
   }
-  // Runway — liquid accounts only (operating/buffer/cash), transfers excluded from burn
-  // Liquid balance: sum opening + net non-transfer tx per liquid account
-  const liquidAccs=S.accounts.filter(a=>['operating','buffer','cash'].includes(a.kind));
-  const liq=liquidAccs.reduce((sum,a)=>{
-    // Use snapshot if available (most accurate), fall back to opening + tx calc
-    if(S.snapshots[a.id]) return sum+Number(S.snapshots[a.id].balance_primary||0);
-    // Manual calc from transactions
-    const accTx=S.txYear.filter(t=>t.account_id===a.id&&t.direction!=='transfer'&&!t.counter_account_id);
-    const netTx=accTx.reduce((s,t)=>s+(t.direction==='in'?1:-1)*Number(t.amount_primary||t.amount||0),0);
-    return sum+Number(a.opening_balance||0)+netTx;
-  },0);
-  // Burn = only real expenses (out, non-transfer, axis-tagged) averaged over days elapsed
-  const realExpenses=S.txMonth.filter(t=>t.direction==='out'&&t.axis!=null&&!t.counter_account_id);
-  const burnMonth=realExpenses.reduce((s,t)=>s+Number(t.amount_primary||t.amount||0),0);
-  const daysElapsed=Math.max(1,now.getDate());
-  const dailyBurn=burnMonth/daysElapsed;
-  S.kpis.runway=dailyBurn>0?Math.round(liq/dailyBurn):null;
-  S.kpis.spentM=burnMonth; // override spentM to also exclude transfers
 }
 
 // ── OFFLINE ──────────────────────────────────────────────────
@@ -1242,32 +1295,95 @@ function openRecurring(ex=null){
   ni.focus();
 }
 
+// ── ACCOUNT META (local flags, no schema change) ─────────────
+// Stored in localStorage as {[account_id]: {countIncome:bool}}
+function accMeta(id){
+  const all=JSON.parse(localStorage.getItem('ledger:accmeta')||'{}');
+  return all[id]||{countIncome:false};
+}
+function setAccMeta(id,meta){
+  const all=JSON.parse(localStorage.getItem('ledger:accmeta')||'{}');
+  all[id]={...accMeta(id),...meta};
+  localStorage.setItem('ledger:accmeta',JSON.stringify(all));
+}
+
 // ── ACCOUNT SHEET ────────────────────────────────────────────
 function openAccount(ex=null){
+  const meta=ex?accMeta(ex.id):{countIncome:false};
   const f={name:ex?.name||'',inst:ex?.institution||'',kind:ex?.kind||'operating',
     cur:ex?.currency||'KES',bal:ex?.opening_balance?String(ex.opening_balance):'0',
-    color:ex?.color||'#10b981',ord:ex?.sort_order||99};
+    color:ex?.color||'#10b981',ord:ex?.sort_order||99,
+    countIncome:meta.countIncome};
   const {body,close}=mkSheet((ex?'Edit':'New')+' account');
-  const ni=el('input',{class:'ibox',placeholder:'e.g. KCB Operating',value:f.name,oninput:(e)=>f.name=e.target.value}); body.appendChild(mkField('Name',ni));
-  body.appendChild(mkField('Institution',el('input',{class:'ibox',placeholder:'e.g. KCB',value:f.inst,oninput:(e)=>f.inst=e.target.value})));
-  body.appendChild(mkField('Kind',mkSel([['operating','Operating'],['buffer','Buffer'],['compound','Compound/MMF'],['speculation','Speculation'],['cash','Cash'],['credit','Credit'],['wallet','Wallet']],f.kind,(v)=>f.kind=v)));
+  const ni=el('input',{class:'ibox',placeholder:'e.g. KCB Operating',value:f.name,oninput:(e)=>f.name=e.target.value});
+  body.appendChild(mkField('Name',ni));
+  body.appendChild(mkField('Institution',el('input',{class:'ibox',placeholder:'e.g. KCB Bank / Faida mTrader',value:f.inst,oninput:(e)=>f.inst=e.target.value})));
+  body.appendChild(mkField('Kind',mkSel([
+    ['operating','Operating — daily spend account'],
+    ['buffer','Buffer — emergency / short-term reserve'],
+    ['compound','Compound / MMF — accumulation, e.g. CIC'],
+    ['speculation','Speculation — trading, e.g. IC Markets, Faida'],
+    ['cash','Cash — physical'],
+    ['credit','Credit — liability'],
+    ['wallet','Wallet — mobile money'],
+  ],f.kind,(v)=>{
+    f.kind=v;
+    // auto-show countIncome toggle for investment-type accounts
+    ciWrap.style.display=['compound','speculation'].includes(v)?'block':'none';
+  })));
   body.appendChild(mkField('Currency',mkSel([['KES','KES'],['USD','USD'],['EUR','EUR'],['GBP','GBP']],f.cur,(v)=>f.cur=v)));
-  body.appendChild(mkField(ex?'Opening balance (set once)':'Opening balance',el('input',{class:'ibox',type:'text',inputmode:'decimal',placeholder:'0',value:f.bal,oninput:(e)=>{e.target.value=e.target.value.replace(/[^\d.-]/g,'');f.bal=e.target.value;}})));
-  // Color
+  body.appendChild(mkField(ex?'Opening balance (set once)':'Opening balance',
+    el('input',{class:'ibox',type:'text',inputmode:'decimal',placeholder:'0',value:f.bal,
+      oninput:(e)=>{e.target.value=e.target.value.replace(/[^\d.-]/g,'');f.bal=e.target.value;}})));
+
+  // ── COUNT INCOME FOR SAVE RATE toggle ──────────────────────
+  const ciWrap=el('div',{style:{display:['compound','speculation'].includes(f.kind)?'block':'none'}});
+  const ciField=el('div',{class:'field'});
+  ciField.appendChild(el('div',{class:'l'},'Count income for save rate'));
+  // Toggle button
+  const ciBtn=el('button',{
+    style:{
+      padding:'10px 16px',borderRadius:'6px',fontFamily:'var(--mono)',fontSize:'12px',
+      fontWeight:'700',letterSpacing:'.08em',textTransform:'uppercase',
+      background:f.countIncome?'color-mix(in srgb,var(--invest) 15%,var(--bg-2))':'var(--bg-2)',
+      border:f.countIncome?'1px solid var(--invest)':'1px solid var(--line)',
+      color:f.countIncome?'var(--invest)':'var(--ink-3)',
+      transition:'all .15s',width:'100%',textAlign:'left',
+    },
+    onclick:()=>{
+      f.countIncome=!f.countIncome;
+      ciBtn.textContent=f.countIncome?'ON — income here counts toward save rate':'OFF — income here ignored in save rate';
+      ciBtn.style.background=f.countIncome?'color-mix(in srgb,var(--invest) 15%,var(--bg-2))':'var(--bg-2)';
+      ciBtn.style.border=f.countIncome?'1px solid var(--invest)':'1px solid var(--line)';
+      ciBtn.style.color=f.countIncome?'var(--invest)':'var(--ink-3)';
+    }
+  },f.countIncome?'ON — income here counts toward save rate':'OFF — income here ignored in save rate');
+  ciField.appendChild(ciBtn);
+  const ciNote=el('div',{style:{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--ink-3)',marginTop:'6px',lineHeight:'1.6'}},
+    'When ON: direct income to this account (e.g. trading P&L, dividends) is included in the save rate denominator. Transfers into this account always count.');
+  ciField.appendChild(ciNote);
+  ciWrap.appendChild(ciField);
+  body.appendChild(ciWrap);
+
+  // Colour
   const cw=el('div',{style:{display:'flex',gap:'8px',flexWrap:'wrap'}});
-  for(const c of['#10b981','#3b82f6','#8b5cf6','#f59e0b','#6b7280','#ef4444','#0ea5e9','#d4ff00']){
+  for(const c of['#10b981','#3b82f6','#8b5cf6','#f59e0b','#6b7280','#ef4444','#0ea5e9','#00e676']){
     const dot=el('button',{style:{width:'28px',height:'28px',borderRadius:'50%',background:c,
       border:f.color===c?'2px solid var(--ink)':'2px solid transparent',transition:'border .12s'},
       onclick:()=>{f.color=c;cw.querySelectorAll('button').forEach(b=>b.style.border='2px solid transparent');dot.style.border='2px solid var(--ink)';}});
     cw.appendChild(dot);
   }
   body.appendChild(mkField('Colour',cw));
+
   body.appendChild(el('button',{class:'submit',onclick:async()=>{
     if(!f.name){toast('Name required');return;}
     const pay={user_id:S.session.user.id,name:f.name,institution:f.inst||null,kind:f.kind,
       currency:f.cur,opening_balance:Number(f.bal)||0,color:f.color,sort_order:f.ord,opening_date:dISO(todayL())};
     const {error}=ex?await sb.from('accounts').update(pay).eq('id',ex.id):await sb.from('accounts').insert(pay);
     if(error){toast('Error: '+error.message);return;}
+    // Save local meta flag
+    const accId=ex?.id||(await sb.from('accounts').select('id').eq('name',f.name).eq('user_id',S.session.user.id).maybeSingle()).data?.id;
+    if(accId) setAccMeta(accId,{countIncome:f.countIncome});
     close();await loadAll();await refreshSnaps();toast(ex?'Updated':'Account created');
   }},'Save account'));
   if(ex) body.appendChild(el('button',{class:'btn-g btn-d',style:{width:'100%',marginTop:'8px'},onclick:async()=>{

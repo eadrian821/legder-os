@@ -439,8 +439,9 @@ async function loadSnaps(uid){
 }
 
 function compute(){
-  const sumOut=(txs)=>txs.filter(t=>t.direction==='out').reduce((s,t)=>s+Number(t.amount_primary||t.amount||0),0);
-  const sumIn =(txs)=>txs.filter(t=>t.direction==='in' ).reduce((s,t)=>s+Number(t.amount_primary||t.amount||0),0);
+  // Exclude transfers (counter_account_id set) from all spend calculations
+  const sumOut=(txs)=>txs.filter(t=>t.direction==='out'&&!t.counter_account_id).reduce((s,t)=>s+Number(t.amount_primary||t.amount||0),0);
+  const sumIn =(txs)=>txs.filter(t=>t.direction==='in' &&!t.counter_account_id).reduce((s,t)=>s+Number(t.amount_primary||t.amount||0),0);
   function axRoll(txs){ const r={I:0,P:0,Su:0,L:0};
     for(const t of txs) if(t.direction==='out'&&t.axis){const a=Number(t.amount_primary||t.amount||0);
       if(t.axis==='INVEST')r.I+=a; else if(t.axis==='PROTECT')r.P+=a; else if(t.axis==='SUSTAIN')r.Su+=a; else r.L+=a;} return r; }
@@ -471,11 +472,24 @@ function compute(){
       .reduce((s,t)=>s+Number(t.amount_primary||t.amount||0),0);
     S.monthDays.push({date:d,total:tot});
   }
-  // Runway
-  const liq=S.accounts.filter(a=>['operating','buffer','cash'].includes(a.kind))
-    .reduce((s,a)=>s+Number(S.snapshots[a.id]?.balance_primary||a.opening_balance||0),0);
-  const burn=S.kpis.spentM/Math.max(1,now.getDate())*30;
-  S.kpis.runway=burn>0?Math.round(liq/burn*30):null;
+  // Runway — liquid accounts only (operating/buffer/cash), transfers excluded from burn
+  // Liquid balance: sum opening + net non-transfer tx per liquid account
+  const liquidAccs=S.accounts.filter(a=>['operating','buffer','cash'].includes(a.kind));
+  const liq=liquidAccs.reduce((sum,a)=>{
+    // Use snapshot if available (most accurate), fall back to opening + tx calc
+    if(S.snapshots[a.id]) return sum+Number(S.snapshots[a.id].balance_primary||0);
+    // Manual calc from transactions
+    const accTx=S.txYear.filter(t=>t.account_id===a.id&&t.direction!=='transfer'&&!t.counter_account_id);
+    const netTx=accTx.reduce((s,t)=>s+(t.direction==='in'?1:-1)*Number(t.amount_primary||t.amount||0),0);
+    return sum+Number(a.opening_balance||0)+netTx;
+  },0);
+  // Burn = only real expenses (out, non-transfer, axis-tagged) averaged over days elapsed
+  const realExpenses=S.txMonth.filter(t=>t.direction==='out'&&t.axis!=null&&!t.counter_account_id);
+  const burnMonth=realExpenses.reduce((s,t)=>s+Number(t.amount_primary||t.amount||0),0);
+  const daysElapsed=Math.max(1,now.getDate());
+  const dailyBurn=burnMonth/daysElapsed;
+  S.kpis.runway=dailyBurn>0?Math.round(liq/dailyBurn):null;
+  S.kpis.spentM=burnMonth; // override spentM to also exclude transfers
 }
 
 // ── OFFLINE ──────────────────────────────────────────────────
@@ -1308,39 +1322,62 @@ async function seed(){
   toast('Seeded.');await loadAll();
 }
 
-// ── HASH TOKEN HANDLER (GitHub Pages + Supabase) ────────────
-async function handleHashToken(){
-  // Supabase puts access_token in the URL hash after magic link click
-  // GitHub Pages sometimes doubles the # — handle both # and ##
-  const raw = window.location.hash || '';
-  const cleaned = raw.replace(/^#+/, ''); // strip leading # or ##
-  if(!cleaned.includes('access_token')) return false;
-  const params = new URLSearchParams(cleaned);
-  const access_token = params.get('access_token');
-  const refresh_token = params.get('refresh_token');
-  if(!access_token) return false;
-  // Set session manually
-  const { data, error } = await sb.auth.setSession({ access_token, refresh_token });
-  if(error){ console.error('Token error:', error.message); return false; }
-  // Clean the URL
-  history.replaceState(null, '', location.pathname);
-  return true;
+// ── AUTH TOKEN HANDLER ───────────────────────────────────────
+// Parses ##access_token=... from URL (GitHub Pages doubles the hash)
+// Called before Supabase client processes URL so session is set manually
+function extractTokensFromUrl(){
+  try{
+    // handle both # and ## prefixes
+    const hash=window.location.hash.replace(/^#+/,'');
+    if(!hash.includes('access_token')) return null;
+    const p=new URLSearchParams(hash);
+    const at=p.get('access_token');
+    const rt=p.get('refresh_token')||'';
+    if(!at) return null;
+    // wipe the hash from URL immediately so refresh doesn't re-process
+    history.replaceState(null,'',location.pathname+location.search);
+    return {access_token:at,refresh_token:rt};
+  }catch(e){return null;}
 }
 
 // ── BOOT ────────────────────────────────────────────────────
 async function boot(){
   render();
   if(!sb) return;
-  // Try to recover session from hash first (magic link redirect)
-  const fromHash = await handleHashToken();
-  const {data:{session}}=await sb.auth.getSession();
-  if(session||fromHash){
-    S.session = session || (await sb.auth.getSession()).data.session;
-    if(S.session) await loadAll();
+
+  // 1. Check if this is a magic link redirect (URL has tokens)
+  const tokens=extractTokensFromUrl();
+  if(tokens){
+    try{
+      const {data,error}=await sb.auth.setSession(tokens);
+      if(!error&&data.session){
+        S.session=data.session;
+        await loadAll();
+        // listen for future changes
+        sb.auth.onAuthStateChange(async(_,sess)=>{
+          S.session=sess;
+          if(sess) await loadAll(); else render();
+        });
+        window.addEventListener('online',()=>{S.online=true;render();drainQ();});
+        window.addEventListener('offline',()=>{S.online=false;render();});
+        if('serviceWorker'in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+        return;
+      }
+    }catch(e){console.warn('setSession failed:',e);}
+  }
+
+  // 2. Normal boot — check for existing persisted session
+  try{
+    const {data:{session}}=await sb.auth.getSession();
+    if(session){S.session=session;await loadAll();}
     else render();
-  } else render();
-  sb.auth.onAuthStateChange(async(_,sess)=>{S.session=sess;if(sess) await loadAll(); else render();});
-  window.addEventListener('online', ()=>{S.online=true;render();drainQ();});
+  }catch(e){render();}
+
+  sb.auth.onAuthStateChange(async(_,sess)=>{
+    S.session=sess;
+    if(sess) await loadAll(); else render();
+  });
+  window.addEventListener('online',()=>{S.online=true;render();drainQ();});
   window.addEventListener('offline',()=>{S.online=false;render();});
   if('serviceWorker'in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
 }

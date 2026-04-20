@@ -1197,12 +1197,37 @@ async function seed(){
   toast('Seeded.');await loadAll();
 }
 
+// ── HASH TOKEN HANDLER (GitHub Pages + Supabase) ────────────
+async function handleHashToken(){
+  // Supabase puts access_token in the URL hash after magic link click
+  // GitHub Pages sometimes doubles the # — handle both # and ##
+  const raw = window.location.hash || '';
+  const cleaned = raw.replace(/^#+/, ''); // strip leading # or ##
+  if(!cleaned.includes('access_token')) return false;
+  const params = new URLSearchParams(cleaned);
+  const access_token = params.get('access_token');
+  const refresh_token = params.get('refresh_token');
+  if(!access_token) return false;
+  // Set session manually
+  const { data, error } = await sb.auth.setSession({ access_token, refresh_token });
+  if(error){ console.error('Token error:', error.message); return false; }
+  // Clean the URL
+  history.replaceState(null, '', location.pathname);
+  return true;
+}
+
 // ── BOOT ────────────────────────────────────────────────────
 async function boot(){
   render();
   if(!sb) return;
+  // Try to recover session from hash first (magic link redirect)
+  const fromHash = await handleHashToken();
   const {data:{session}}=await sb.auth.getSession();
-  if(session){S.session=session;await loadAll();}else render();
+  if(session||fromHash){
+    S.session = session || (await sb.auth.getSession()).data.session;
+    if(S.session) await loadAll();
+    else render();
+  } else render();
   sb.auth.onAuthStateChange(async(_,sess)=>{S.session=sess;if(sess) await loadAll(); else render();});
   window.addEventListener('online', ()=>{S.online=true;render();drainQ();});
   window.addEventListener('offline',()=>{S.online=false;render();});

@@ -534,23 +534,48 @@ function compute(){
   const totD=S.axT.I+S.axT.P+S.axT.Su+S.axT.L;
   S.kpis.leakPct=totD>0?(S.axT.L/totD)*100:0;
 
-  // ── RUNWAY (liquid balance ÷ daily consumptive burn) ──────────
-  // Liquid balance computed from opening + ALL tx flows on liquid accounts
-  // Transfers OUT of liquid (to invest) correctly reduce liquid balance
-  // Transfers IN to liquid (from invest) correctly increase it
-  // This is snapshot-independent — no stale data
-  const liq=S.accounts.filter(isLiquid).reduce((sum,a)=>{
-    const net=S.txYear.filter(t=>t.account_id===a.id).reduce((s,t)=>{
-      if(t.direction==='in' ) return s+amt(t); // both real income and transfer-in
-      if(t.direction==='out') return s-amt(t); // both real expense and transfer-out
-      return s;
+  // ── TRAILING 30-DAY BURN (stable signal regardless of calendar position) ──
+  // Uses last 30 days of SUSTAIN+LEAK only — not distorted by month boundaries
+  const burn30start=addD(todayL(),-30);
+  const burn30txs=S.txYear.filter(t=>
+    new Date(t.occurred_at)>=burn30start &&
+    t.direction==='out' && isReal(t) &&
+    (t.axis==='SUSTAIN'||t.axis==='LEAK')
+  );
+  const burn30total=burn30txs.reduce((s,t)=>s+amt(t),0);
+  const dailyBurn30=burn30total/30; // always divided by 30, not days-elapsed
+  S.kpis.dailyBurn=dailyBurn30;    // override with trailing figure
+
+  // ── BALANCE CALC (tx-based, snapshot-independent) ─────────────
+  function accBalance(filterFn){
+    return S.accounts.filter(filterFn).reduce((sum,a)=>{
+      const net=S.txYear.filter(t=>t.account_id===a.id).reduce((s,t)=>{
+        if(t.direction==='in')  return s+amt(t);
+        if(t.direction==='out') return s-amt(t);
+        return s;
+      },0);
+      return sum+Number(a.opening_balance||0)+net;
     },0);
-    return sum+Number(a.opening_balance||0)+net;
-  },0);
-  S.kpis.liqBal=liq;
-  // Runway = liquid ÷ daily burn (not daily total spend)
-  // If burn=0 (all INVEST/PROTECT), runway is effectively infinite → show ∞
-  S.kpis.runway=dailyBurn>0?Math.round(liq/dailyBurn):liq>0?9999:null;
+  }
+
+  // Class 1 — liquid cash only (operating / buffer / cash)
+  // "If I stop earning today, how long does my wallet last?"
+  const liqBal=accBalance(isLiquid);
+
+  // Class 2 — liquid + investments (compound/MMF + speculation/trading)
+  // "If I liquidate everything, how long do I last?"
+  const totalBal=accBalance(a=>isLiquid(a)||isInvest(a));
+
+  S.kpis.liqBal=liqBal;
+  S.kpis.totalBal=totalBal;
+
+  // Runway A = cash only ÷ daily burn
+  // Runway B = all assets ÷ daily burn
+  // 9999 = effectively infinite (burn = 0)
+  const rA=dailyBurn30>0?Math.round(liqBal/dailyBurn30):liqBal>0?9999:null;
+  const rB=dailyBurn30>0?Math.round(totalBal/dailyBurn30):totalBal>0?9999:null;
+  S.kpis.runway=rA;       // cash runway (primary)
+  S.kpis.runwayTotal=rB;  // total asset runway (secondary)
 
   // ── INVEST RATE (% of all cash deployed to investments) ───────
   // Numerator: transfers from liquid→invest + INVEST axis expenses
@@ -783,12 +808,17 @@ function vToday(){
   kpis.appendChild(kpi('Week out',fmt(k.spentW),S.currency));
 
   // Row 2: runway / save rate / invest / deployed
-  const runwayVal=k.runway===9999?'∞':k.runway!=null?k.runway+'d':'—';
-  const runwayColor=k.runway!=null&&k.runway!==9999&&k.runway<60?'var(--leak)':
-                    k.runway===9999?'var(--invest)':null;
-  kpis.appendChild(kpi('Runway',runwayVal,'days of cash',runwayColor));
+  // Runway A — cash only
+  const rAval=k.runway===9999?'∞':k.runway!=null?k.runway+'d':'—';
+  const rAcolor=k.runway!=null&&k.runway!==9999&&k.runway<60?'var(--leak)':
+                k.runway===9999?'var(--invest)':null;
+  // Runway B — all assets
+  const rBval=k.runwayTotal===9999?'∞':k.runwayTotal!=null?k.runwayTotal+'d':'—';
+  const rBcolor=k.runwayTotal!=null&&k.runwayTotal!==9999&&k.runwayTotal<90?'var(--sustain)':
+                k.runwayTotal===9999?'var(--invest)':null;
+  kpis.appendChild(kpi('Cash runway',rAval,'liquid only · 30d burn',rAcolor));
+  kpis.appendChild(kpi('Asset runway',rBval,'incl. MMF+trading',rBcolor));
   kpis.appendChild(kpi('Save rate',k.savingsRate.toFixed(0)+'%','invest+protect+xfer',k.savingsRate>30?'var(--invest)':null));
-  kpis.appendChild(kpi('Invest rate',k.investRate.toFixed(0)+'%','deployed to assets',k.investRate>20?'var(--invest)':null));
   kpis.appendChild(kpi('Deployed',fmt(k.deployedM),S.currency+' this month',k.deployedM>0?'var(--invest)':null));
 
   f.appendChild(kpis);

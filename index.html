@@ -1415,7 +1415,7 @@ function openTransfer(){
     feeContent.appendChild(feeRow('Route',routeKey==='none'?'Custom':routeKey.replace('-',' → ').toUpperCase()));
     feeContent.appendChild(feeRow('Amount received',fmt(received)+' '+(fa?.currency||S.currency)));
     feeContent.appendChild(feeRow('Transaction fee',fee>0?fmt(fee)+' '+(fa?.currency||S.currency):'Free',fee>0?'var(--leak)':null));
-    feeContent.appendChild(feeRow('Total deducted from '+(fa?.name||'account'）,fmt(totalDebit),null,true));
+    feeContent.appendChild(feeRow('Total deducted from '+(fa?.name||'account'),fmt(totalDebit),null,true));
 
     feeBox.style.display=received>0?'block':'none';
     refreshSub();

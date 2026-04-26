@@ -332,6 +332,37 @@ main{flex:1;padding:18px 18px 120px;max-width:1440px;margin:0 auto;width:100%}
 .spinner{width:14px;height:14px;border:1.5px solid var(--ink-4);border-top-color:var(--accent);
   border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
 @keyframes spin{to{transform:rotate(360deg)}}
+/* TRANSFER FORM */
+.xfer-route{display:grid;grid-template-columns:1fr 36px 1fr;gap:8px;align-items:center;margin-bottom:16px}
+.xfer-arrow{text-align:center;font-size:18px;color:var(--ink-3)}
+.xfer-acc{flex:1;padding:12px;background:var(--bg-2);border:1px solid var(--line);border-radius:6px;
+  cursor:pointer;transition:all .15s}
+.xfer-acc:hover{border-color:var(--line-2)}
+.xfer-acc.active{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--bg-2))}
+.xfer-acc .xa-name{font-weight:600;font-size:13px;color:var(--ink)}
+.xfer-acc .xa-kind{font-family:var(--mono);font-size:10px;color:var(--ink-3);margin-top:2px;text-transform:uppercase;letter-spacing:.08em}
+.xfer-acc .xa-bal{font-family:var(--mono);font-size:11px;color:var(--invest);margin-top:4px}
+.fee-box{background:color-mix(in srgb,var(--leak) 10%,var(--bg-2));border:1px solid color-mix(in srgb,var(--leak) 30%,var(--line));
+  border-radius:6px;padding:12px 14px;margin-bottom:14px}
+.fee-box .fee-title{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--leak);margin-bottom:8px}
+.fee-row{display:flex;justify-content:space-between;align-items:baseline;
+  font-family:var(--mono);font-size:12px;color:var(--ink-2);padding:3px 0}
+.fee-row .fl{color:var(--ink-3)}
+.fee-row .fv{font-weight:600}
+.fee-row.total{border-top:1px solid color-mix(in srgb,var(--leak) 20%,var(--line));margin-top:4px;
+  padding-top:6px;color:var(--ink)}
+.fee-row.total .fv{color:var(--leak)}
+.fab-wrap{position:fixed;right:18px;bottom:calc(76px + env(safe-area-inset-bottom));
+  display:flex;flex-direction:column;align-items:flex-end;gap:10px;z-index:35}
+.fab-secondary{width:44px;height:44px;border-radius:50%;background:var(--bg-2);
+  border:1px solid var(--line-2);color:var(--ink-2);font-size:18px;
+  display:grid;place-items:center;transition:all .15s;
+  box-shadow:0 4px 16px rgba(0,0,0,.4)}
+.fab-secondary:hover{border-color:var(--accent);color:var(--accent)}
+.fab-label{position:absolute;right:52px;background:var(--bg-2);border:1px solid var(--line-2);
+  border-radius:4px;padding:3px 8px;font-family:var(--mono);font-size:10px;
+  color:var(--ink-3);white-space:nowrap;pointer-events:none}
 ::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:3px}
@@ -716,7 +747,11 @@ function vShell(){
   if(S.tab==='accounts') m.appendChild(vAccounts());
   if(S.tab==='settings') m.appendChild(vSettings());
   root.appendChild(m);
-  root.appendChild(el('button',{class:'fab',onclick:openLog,'aria-label':'Log'},'+'));
+  const fabWrap=el('div',{class:'fab-wrap'});
+  fabWrap.appendChild(el('button',{class:'fab-secondary',onclick:openTransfer,'aria-label':'Transfer',title:'Transfer'},
+    '⇄'));
+  fabWrap.appendChild(el('button',{class:'fab',onclick:openLog,'aria-label':'Log'},'+'));
+  root.appendChild(fabWrap);
   return root;
 }
 
@@ -1218,28 +1253,318 @@ function openEditTx(t){
 }
 
 // ── LOG SHEET ────────────────────────────────────────────────
+// ── KENYAN TRANSFER FEE TABLE ────────────────────────────────
+// Approximate M-Pesa / bank charges for common routes
+// Format: {route: (amount) => fee}
+const XFER_FEES = {
+  'mpesa-mpesa': amt => {
+    if(amt<=100)  return 0;
+    if(amt<=500)  return 6;
+    if(amt<=1000) return 13;
+    if(amt<=1500) return 23;
+    if(amt<=2500) return 33;
+    if(amt<=3500) return 53;
+    if(amt<=5000) return 57;
+    if(amt<=7500) return 78;
+    if(amt<=10000)return 90;
+    if(amt<=15000)return 100;
+    if(amt<=20000)return 105;
+    if(amt<=35000)return 108;
+    if(amt<=50000)return 108;
+    return 108;
+  },
+  'bank-mpesa': amt => { // bank to M-Pesa withdrawal equivalent
+    if(amt<=100)  return 0;
+    if(amt<=500)  return 11;
+    if(amt<=1000) return 29;
+    if(amt<=2500) return 52;
+    if(amt<=5000) return 69;
+    if(amt<=10000)return 87;
+    if(amt<=20000)return 115;
+    if(amt<=35000)return 139;
+    if(amt<=50000)return 139;
+    return 175;
+  },
+  'mpesa-bank': amt => Math.max(30, Math.round(amt * 0.002)), // ~0.2% paybill
+  'bank-bank':  amt => Math.max(0, Math.round(amt * 0.0015)), // ~0.15% RTGS/EFT
+  'mpesa-paybill': amt => Math.max(0, Math.round(amt * 0.001)), // ~0.1%
+  'none': () => 0,
+};
+
+function getRouteKey(fromAcc, toAcc){
+  const kind = a => {
+    if(!a) return 'other';
+    if(a.kind==='wallet') return 'mpesa';
+    if(['operating','buffer','compound'].includes(a.kind)) return 'bank';
+    return 'other';
+  };
+  const fk=kind(fromAcc), tk=kind(toAcc);
+  const key=fk+'-'+tk;
+  return XFER_FEES[key]?key:'none';
+}
+
+// ── TRANSFER SHEET ────────────────────────────────────────────
+function openTransfer(){
+  if(!S.accounts.length){toast('No accounts',{label:'GO',cb:()=>{S.tab='settings';render()}});return;}
+  const f={
+    fromId: S.lu.account||S.accounts[0]?.id,
+    toId:   null,
+    received: '', // amount recipient gets
+    note:'', dt:null,
+    feeOverride: null, // null = auto-calculated
+  };
+  const {body,close}=mkSheet('Transfer money');
+
+  // ── ROUTE SELECTOR ────────────────────────────────────────────
+  body.appendChild(el('div',{style:{fontFamily:'var(--mono)',fontSize:'10px',
+    letterSpacing:'.12em',textTransform:'uppercase',color:'var(--ink-3)',
+    marginBottom:'10px'}},'Select route'));
+
+  const routeWrap=el('div',{class:'xfer-route'});
+
+  // FROM
+  const fromBox=el('div',{class:'xfer-acc active'});
+  const toBox=el('div',{class:'xfer-acc',style:{opacity:'.5'}});
+
+  function refreshRoute(){
+    const fa=S.accounts.find(a=>a.id===f.fromId);
+    const ta=S.accounts.find(a=>a.id===f.toId);
+    // from box
+    fromBox.innerHTML='';
+    fromBox.appendChild(el('div',{class:'xa-kind'},'FROM'));
+    fromBox.appendChild(el('div',{class:'xa-name'},fa?.name||'Select'));
+    if(fa){
+      const bal=S.snapshots[fa.id]?Number(S.snapshots[fa.id].balance_primary):Number(fa.opening_balance||0);
+      fromBox.appendChild(el('div',{class:'xa-bal'},fmt(bal)+' '+fa.currency));
+    }
+    // to box
+    toBox.innerHTML='';
+    toBox.style.opacity=f.toId?'1':'.5';
+    toBox.appendChild(el('div',{class:'xa-kind'},'TO'));
+    toBox.appendChild(el('div',{class:'xa-name'},ta?.name||'Select'));
+    if(ta){
+      const bal=S.snapshots[ta.id]?Number(S.snapshots[ta.id].balance_primary):Number(ta.opening_balance||0);
+      toBox.appendChild(el('div',{class:'xa-bal'},fmt(bal)+' '+ta.currency));
+    }
+    refreshFee();
+  }
+
+  fromBox.onclick=()=>pickAccount('FROM',(id)=>{
+    if(id===f.toId) f.toId=f.fromId; // swap if same
+    f.fromId=id;refreshRoute();
+  });
+  toBox.onclick=()=>pickAccount('TO',(id)=>{
+    if(id===f.fromId) f.fromId=f.toId;
+    f.toId=id;refreshRoute();
+  });
+
+  routeWrap.appendChild(fromBox);
+  routeWrap.appendChild(el('div',{class:'xfer-arrow'},'→'));
+  routeWrap.appendChild(toBox);
+  body.appendChild(routeWrap);
+
+  // Quick swap button
+  const swapBtn=el('button',{class:'btn-g',style:{width:'100%',marginBottom:'16px'},
+    onclick:()=>{[f.fromId,f.toId]=[f.toId,f.fromId];refreshRoute();}
+  },'⇅  Swap direction');
+  body.appendChild(swapBtn);
+
+  // ── AMOUNT RECEIVED ───────────────────────────────────────────
+  body.appendChild(el('div',{style:{fontFamily:'var(--mono)',fontSize:'10px',
+    letterSpacing:'.12em',textTransform:'uppercase',color:'var(--ink-3)',marginBottom:'8px'}},
+    'Amount recipient receives'));
+  const accObj=()=>S.accounts.find(a=>a.id===f.fromId);
+  const curL=el('span',{class:'cur'},accObj()?.currency||S.currency);
+  const amtIn=el('input',{type:'text',inputmode:'decimal',autocomplete:'off',placeholder:'0',
+    oninput:(e)=>{
+      e.target.value=e.target.value.replace(/[^0-9.]/g,'').replace(/(\..*)\./g,'$1');
+      f.received=e.target.value;f.feeOverride=null;refreshFee();validate();
+    }});
+  body.appendChild(el('div',{class:'amtwrap'},curL,amtIn));
+
+  // ── FEE BOX ───────────────────────────────────────────────────
+  const feeBox=el('div',{class:'fee-box',style:{display:'none'}});
+  const feeContent=el('div',{});
+  feeBox.appendChild(el('div',{class:'fee-title'},'Transaction costs (LEAK)'));
+  feeBox.appendChild(feeContent);
+
+  // Manual fee override
+  const feeOverrideWrap=el('div',{class:'field',style:{marginTop:'10px'}});
+  feeOverrideWrap.appendChild(el('div',{class:'l'},'Override fee (if you know exact charge)'));
+  const feeIn=el('input',{class:'ibox',type:'text',inputmode:'decimal',placeholder:'auto-calculated',
+    oninput:(e)=>{
+      e.target.value=e.target.value.replace(/[^0-9.]/g,'');
+      f.feeOverride=e.target.value?Number(e.target.value):null;
+      refreshFee();
+    }});
+  feeOverrideWrap.appendChild(feeIn);
+  feeBox.appendChild(feeOverrideWrap);
+  body.appendChild(feeBox);
+
+  function refreshFee(){
+    const received=Number(f.received)||0;
+    if(received<=0){feeBox.style.display='none';refreshSub();return;}
+    const fa=S.accounts.find(a=>a.id===f.fromId);
+    const ta=S.accounts.find(a=>a.id===f.toId);
+    const routeKey=getRouteKey(fa,ta);
+    const autoFee=XFER_FEES[routeKey](received);
+    const fee=f.feeOverride!==null?f.feeOverride:autoFee;
+    const totalDebit=received+fee;
+
+    feeContent.innerHTML='';
+    feeContent.appendChild(feeRow('Route',routeKey==='none'?'Custom':routeKey.replace('-',' → ').toUpperCase()));
+    feeContent.appendChild(feeRow('Amount received',fmt(received)+' '+(fa?.currency||S.currency)));
+    feeContent.appendChild(feeRow('Transaction fee',fee>0?fmt(fee)+' '+(fa?.currency||S.currency):'Free',fee>0?'var(--leak)':null));
+    feeContent.appendChild(feeRow('Total deducted from '+(fa?.name||'account'）,fmt(totalDebit),null,true));
+
+    feeBox.style.display=received>0?'block':'none';
+    refreshSub();
+  }
+
+  function feeRow(label,val,color,isTotal=false){
+    const row=el('div',{class:'fee-row'+(isTotal?' total':'')});
+    row.appendChild(el('span',{class:'fl'},label));
+    row.appendChild(el('span',{class:'fv',style:color?{color}:{}},val));
+    return row;
+  }
+
+  body.appendChild(el('div',{style:{height:'1px',background:'var(--line)',margin:'4px 0 14px'}}));
+
+  // ── NOTE + DATE ───────────────────────────────────────────────
+  body.appendChild(mkField('Note (route, purpose)',el('input',{class:'ibox',type:'text',maxlength:'500',
+    placeholder:'e.g. NCBA → M-Pesa for rent',value:f.note,oninput:(e)=>f.note=e.target.value})));
+  body.appendChild(mkField('Date / time',el('input',{class:'ibox',type:'datetime-local',
+    value:new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16),
+    onchange:(e)=>f.dt=new Date(e.target.value).toISOString()})));
+
+  // ── SUBMIT ────────────────────────────────────────────────────
+  const sub=el('button',{class:'submit',disabled:true,onclick:save},'Confirm transfer');
+  body.appendChild(sub);
+
+  function refreshSub(){
+    const received=Number(f.received)||0;
+    sub.disabled=!(received>0&&f.fromId&&f.toId&&f.fromId!==f.toId);
+    if(!sub.disabled){
+      const fa=S.accounts.find(a=>a.id===f.fromId);
+      const ta=S.accounts.find(a=>a.id===f.toId);
+      const routeKey=getRouteKey(fa,ta);
+      const fee=f.feeOverride!==null?f.feeOverride:XFER_FEES[routeKey](received);
+      const total=received+fee;
+      sub.textContent=fee>0
+        ?`Confirm · ${fmt(received)} received · ${fmt(total)} deducted`
+        :`Confirm transfer · ${fmt(received)}`;
+    } else {
+      sub.textContent='Confirm transfer';
+    }
+  }
+  function validate(){refreshSub();}
+
+  async function save(){
+    sub.disabled=true;sub.innerHTML='<span class="spinner"></span>';
+    const received=Number(f.received)||0;
+    const fa=S.accounts.find(a=>a.id===f.fromId);
+    const ta=S.accounts.find(a=>a.id===f.toId);
+    const routeKey=getRouteKey(fa,ta);
+    const fee=f.feeOverride!==null?f.feeOverride:XFER_FEES[routeKey](received);
+    const totalDebit=received+fee;
+    const occurred=f.dt||iso();
+    const note=f.note||null;
+
+    const errors=[];
+
+    // Tx 1: OUT from source — full debit amount (received + fee)
+    const r1=await insertTx({
+      amount:totalDebit,currency:fa?.currency||S.currency,direction:'out',
+      account_id:f.fromId,counter_account_id:f.toId,
+      category_id:null,axis:null,note,occurred_at:occurred,amount_primary:totalDebit
+    });
+    if(r1.error) errors.push(r1.error.message);
+
+    // Tx 2: IN to destination — received amount only
+    const r2=await insertTx({
+      amount:received,currency:ta?.currency||S.currency,direction:'in',
+      account_id:f.toId,counter_account_id:f.fromId,
+      category_id:null,axis:null,note,occurred_at:occurred,amount_primary:received
+    });
+    if(r2.error) errors.push(r2.error.message);
+
+    // Tx 3: If there's a fee — log as a real LEAK expense on the source account
+    if(fee>0){
+      // Find or create "Transaction fees" category
+      let feeCat=S.categories.find(c=>c.name.toLowerCase().includes('transaction fee')||c.name.toLowerCase().includes('transfer fee'));
+      if(!feeCat){
+        const {data:nc}=await sb.from('categories').insert({
+          user_id:S.session.user.id,name:'Transaction fees',
+          is_income:false,default_axis:'LEAK',is_archived:false
+        }).select().single();
+        if(nc){feeCat=nc;S.categories.push(nc);}
+      }
+      const r3=await insertTx({
+        amount:fee,currency:fa?.currency||S.currency,direction:'out',
+        account_id:f.fromId,category_id:feeCat?.id||null,
+        axis:'LEAK',note:'Transfer fee: '+(note||routeKey),
+        occurred_at:occurred,amount_primary:fee
+      });
+      if(r3.error) errors.push(r3.error.message);
+    }
+
+    if(errors.length){
+      toast('Error: '+errors[0]);
+      sub.disabled=false;sub.textContent='Confirm transfer';return;
+    }
+    close();await loadAll();
+    toast(fee>0
+      ?`Transfer done · ${fmt(received)} received · ${fmt(fee)} fee (LEAK)`
+      :`Transfer done · ${fmt(received)}`);
+  }
+
+  refreshRoute();
+  refreshSub();
+}
+
+// ── ACCOUNT PICKER (used by transfer form) ────────────────────
+function pickAccount(label, onSelect){
+  const {body,close}=mkSheet('Pick account — '+label);
+  for(const a of S.accounts){
+    const row=el('div',{class:'lrow',style:{cursor:'pointer'},onclick:()=>{onSelect(a.id);close();}});
+    row.appendChild(el('div',{class:'sw',style:{background:a.color||'var(--ink-4)'}}));
+    row.appendChild(el('div',{class:'mid'},
+      el('div',{class:'n'},a.name),
+      el('div',{class:'m'},a.kind.toUpperCase()+(a.institution?' · '+a.institution:''))
+    ));
+    const bal=S.snapshots[a.id]?Number(S.snapshots[a.id].balance_primary):Number(a.opening_balance||0);
+    row.appendChild(el('div',{class:'r'},
+      el('div',{class:'bal'},el('span',{class:'cur'},a.currency),fmtX(bal))
+    ));
+    body.appendChild(row);
+  }
+}
+
 function openLog(pre={}){
   if(!S.accounts.length||!S.categories.length){toast('Seed first',{label:'GO',cb:()=>{S.tab='settings';render()}});return;}
   const f={
     dir:pre.direction||'out', amt:pre.amount?String(pre.amount):'',
     acc:pre.account_id||S.lu.account||S.accounts[0]?.id,
-    toAcc:null, cat:pre.category_id||S.lu.category||null,
+    cat:pre.category_id||S.lu.category||null,
     catName:'', axis:pre.axis||null, note:pre.note||'', dt:null
   };
   const {body,close}=mkSheet('Log transaction');
 
-  // direction
+  // direction — expense / income only; transfer has its own form
   const seg=el('div',{class:'seg'});
-  for(const [d,l] of [['out','Expense'],['in','Income'],['transfer','Transfer']]){
+  for(const [d,l] of [['out','Expense'],['in','Income']]){
     const b=el('button',{class:f.dir===d?'active':'',onclick:()=>{
-      f.dir=d;seg.querySelectorAll('button').forEach(x=>x.classList.remove('active'));b.classList.add('active');
-      catSection.style.display=d==='transfer'?'none':'block';
-      axSection.style.display=d==='transfer'?'none':'block';
-      toSection.style.display=d==='transfer'?'block':'none';
-      rCats('');validate();
+      f.dir=d;seg.querySelectorAll('button').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');rCats('');validate();
     }},l);
     seg.appendChild(b);
   }
+  const xBtn=el('button',{
+    style:{padding:'10px 0',fontFamily:'var(--mono)',fontSize:'11px',letterSpacing:'.08em',
+      textTransform:'uppercase',color:'var(--accent)',borderRadius:'2px'},
+    onclick:()=>{close();openTransfer();}
+  },'⇄ Transfer');
+  seg.appendChild(xBtn);
   body.appendChild(seg);
 
   // amount
@@ -1251,7 +1576,7 @@ function openLog(pre={}){
 
   // from account
   const fromField=el('div',{class:'field'});
-  fromField.appendChild(el('div',{class:'l'},'From account'));
+  fromField.appendChild(el('div',{class:'l'},'Account'));
   const fromChips=el('div',{class:'chips'});
   function renderFrom(){
     fromChips.innerHTML='';
@@ -1266,37 +1591,19 @@ function openLog(pre={}){
   fromField.appendChild(fromChips);
   body.appendChild(fromField);
 
-  // to account (transfer)
-  const toSection=el('div',{class:'field',style:{display:f.dir==='transfer'?'block':'none'}});
-  toSection.appendChild(el('div',{class:'l'},'To account'));
-  const toChips=el('div',{class:'chips'});
-  for(const a of S.accounts){
-    const ch=el('button',{class:'chip'+(f.toAcc===a.id?' active':''),
-      style:{borderLeft:'3px solid '+(a.color||'var(--ink-4)')},
-      onclick:()=>{f.toAcc=a.id;toChips.querySelectorAll('.chip').forEach(x=>x.classList.remove('active'));ch.classList.add('active');validate();}},a.name);
-    toChips.appendChild(ch);
-  }
-  toSection.appendChild(toChips);
-  body.appendChild(toSection);
-
-  // category (expense/income)
-  const catSection=el('div',{style:{display:f.dir==='transfer'?'none':'block'}});
+  // category
   const catInputWrap=el('div',{class:'field'});
   catInputWrap.appendChild(el('div',{class:'l'},'Category'));
   const catIn=el('input',{class:'cat-search',type:'text',
     placeholder:'Type to filter or add new…',
-    oninput:(e)=>{
-      const q=e.target.value; f.catName=q;
+    oninput:(e)=>{const q=e.target.value;f.catName=q;
       const match=S.categories.find(c=>c.name.toLowerCase()===q.toLowerCase());
-      if(!match) f.cat=null;
-      rCats(q); validate();
-    }
+      if(!match) f.cat=null;rCats(q);validate();}
   });
   catInputWrap.appendChild(catIn);
   const cc=el('div',{class:'chips',style:{marginTop:'8px'}});
   catInputWrap.appendChild(cc);
-  catSection.appendChild(catInputWrap);
-  body.appendChild(catSection);
+  body.appendChild(catInputWrap);
 
   function rCats(q){
     cc.innerHTML='';
@@ -1305,8 +1612,7 @@ function openLog(pre={}){
       const k=c.name.toLowerCase();
       if(seen.has(k)) return false; seen.add(k);
       const dirOk=f.dir==='in'?c.is_income:!c.is_income;
-      const qOk=!q||k.includes(q.toLowerCase());
-      return dirOk&&qOk;
+      return dirOk&&(!q||k.includes(q.toLowerCase()));
     }).sort((a,b)=>{
       const la=S.lu.freq?.[a.id]||0,lb2=S.lu.freq?.[b.id]||0;
       return lb2!==la?lb2-la:a.name.localeCompare(b.name);
@@ -1315,8 +1621,7 @@ function openLog(pre={}){
       const ch=el('button',{class:'chip'+(f.cat===c.id?' active':''),onclick:()=>{
         f.cat=c.id;f.catName=c.name;catIn.value=c.name;
         cc.querySelectorAll('.chip').forEach(x=>x.classList.remove('active'));ch.classList.add('active');
-        if(c.default_axis&&!f.axis){f.axis=c.default_axis;rAxis();}
-        validate();
+        if(c.default_axis&&!f.axis){f.axis=c.default_axis;rAxis();}validate();
       }},c.name);
       cc.appendChild(ch);
     }
@@ -1328,7 +1633,6 @@ function openLog(pre={}){
   rCats('');
 
   // axis
-  const axSection=el('div',{style:{display:f.dir==='transfer'?'none':'block'}});
   const axf=el('div',{class:'field'}); axf.appendChild(el('div',{class:'l'},'Axis'));
   const ag=el('div',{class:'axgrid'});
   for(const [n,d] of [['INVEST','compounds'],['PROTECT','mitigates'],['SUSTAIN','sustains'],['LEAK','destroys']]){
@@ -1337,12 +1641,11 @@ function openLog(pre={}){
     }},el('div',{class:'n'},n),el('div',{class:'d'},d));
     ag.appendChild(b);
   }
-  axf.appendChild(ag); axSection.appendChild(axf);
-  body.appendChild(axSection);
+  axf.appendChild(ag);
+  body.appendChild(axf);
   function rAxis(){ag.querySelectorAll('.axbtn').forEach(x=>x.classList.toggle('active',x.dataset.a===f.axis));}
   if(f.axis) rAxis();
 
-  // note + date
   body.appendChild(mkField('Note',el('input',{class:'ibox',type:'text',maxlength:'500',
     placeholder:'e.g. lunch at Mama Sue',value:f.note,oninput:(e)=>f.note=e.target.value})));
   body.appendChild(mkField('Date / time',el('input',{class:'ibox',type:'datetime-local',
@@ -1353,32 +1656,13 @@ function openLog(pre={}){
   body.appendChild(sub);
 
   function validate(){
-    if(f.dir==='transfer'){
-      sub.disabled=!(f.amt&&Number(f.amt)>0&&f.acc&&f.toAcc&&f.acc!==f.toAcc);
-    } else {
-      const hasCat=f.cat||(f.catName&&f.catName.trim().length>0);
-      sub.disabled=!(f.amt&&Number(f.amt)>0&&f.acc&&hasCat&&f.axis);
-    }
+    const hasCat=f.cat||(f.catName&&f.catName.trim().length>0);
+    sub.disabled=!(f.amt&&Number(f.amt)>0&&f.acc&&hasCat&&f.axis);
   }
 
   async function save(){
     sub.disabled=true;sub.innerHTML='<span class="spinner"></span>';
     const acc=S.accounts.find(a=>a.id===f.acc);
-
-    if(f.dir==='transfer'){
-      const toAcc=S.accounts.find(a=>a.id===f.toAcc);
-      const base={amount:Number(f.amt),note:f.note||'Transfer',occurred_at:f.dt||iso(),
-        axis:null,category_id:null,source:'manual',amount_primary:Number(f.amt)};
-      const r1=await insertTx({...base,currency:acc?.currency||S.currency,direction:'out',
-        account_id:f.acc,counter_account_id:f.toAcc});
-      const r2=await insertTx({...base,currency:toAcc?.currency||S.currency,direction:'in',
-        account_id:f.toAcc,counter_account_id:f.acc});
-      if(r1.error||r2.error){toast('Transfer error');sub.disabled=false;sub.textContent='Save entry';return;}
-      close();await loadAll();toast('Transfer · '+fmt(Number(f.amt)));
-      return;
-    }
-
-    // resolve / create category
     let catId=f.cat;
     if(!catId&&f.catName&&f.catName.trim()){
       const {data:nc,error:ce}=await sb.from('categories').insert({
@@ -1388,7 +1672,6 @@ function openLog(pre={}){
       if(ce){toast('Category error: '+ce.message);sub.disabled=false;sub.textContent='Save entry';return;}
       catId=nc.id; S.categories.push(nc);
     }
-
     const payload={amount:Number(f.amt),currency:acc?.currency||S.currency,
       direction:f.dir,account_id:f.acc,category_id:catId,axis:f.axis,
       note:f.note||null,occurred_at:f.dt||iso(),amount_primary:Number(f.amt)};

@@ -300,7 +300,52 @@ main{flex:1;padding:18px 18px 120px;max-width:1440px;margin:0 auto;width:100%}
 .lrow .bdate{font-family:var(--mono);font-size:10px;color:var(--ink-4);margin-top:2px}
 /* HEATMAP */
 .heatmap{display:flex;gap:3px;flex-wrap:wrap;margin:8px 0}
-.hm{width:12px;height:12px;border-radius:1px;background:var(--bg-2)}
+.hm{width:12px;height:12px;border-radius:1px;background:var(--bg-2);cursor:help}
+/* PERIOD NAV */
+.period-nav{display:flex;align-items:center;gap:0;background:var(--bg-1);
+  border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-bottom:12px}
+.period-nav .pn-btn{padding:10px 14px;font-family:var(--mono);font-size:16px;
+  color:var(--ink-3);transition:all .15s;flex-shrink:0}
+.period-nav .pn-btn:hover{color:var(--accent);background:var(--bg-2)}
+.period-nav .pn-btn:disabled{color:var(--ink-4);cursor:default}
+.period-nav .pn-label{flex:1;text-align:center;font-family:var(--mono);font-size:12px;
+  font-weight:700;letter-spacing:.06em;color:var(--ink);padding:10px 0}
+.period-nav .pn-today{padding:8px 12px;font-family:var(--mono);font-size:10px;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--accent);flex-shrink:0}
+/* AUDIT MODE TABS */
+.audit-tabs{display:grid;grid-template-columns:repeat(4,1fr);
+  background:var(--bg-2);border:1px solid var(--line);border-radius:6px;
+  padding:3px;gap:3px;margin-bottom:14px}
+.audit-tab{padding:9px 0;font-family:var(--mono);font-size:11px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-3);border-radius:4px;transition:all .15s;text-align:center}
+.audit-tab.active{background:var(--bg);color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+/* AUDIT TABLE */
+.audit-table{width:100%;border-collapse:collapse;margin-top:8px}
+.audit-table th{font-family:var(--mono);font-size:9px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ink-3);padding:8px 12px;
+  text-align:left;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg)}
+.audit-table th:last-child{text-align:right}
+.audit-table td{padding:10px 12px;border-bottom:1px solid var(--line);
+  font-family:var(--mono);font-size:12px;color:var(--ink-2)}
+.audit-table td:last-child{text-align:right;font-weight:600}
+.audit-table tr:hover td{background:var(--bg-2)}
+.audit-table .axis-dot{width:6px;height:6px;border-radius:50%;display:inline-block;
+  margin-right:6px;vertical-align:middle;flex-shrink:0}
+.audit-summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.audit-summary-grid.four{grid-template-columns:repeat(4,1fr)}
+.audit-stat{background:var(--bg-1);border:1px solid var(--line);border-radius:6px;padding:12px}
+.audit-stat .al{font-family:var(--mono);font-size:9px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ink-3);margin-bottom:6px}
+.audit-stat .av{font-family:var(--mono);font-weight:700;font-size:18px;letter-spacing:-.02em}
+.quarter-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:10px 0}
+.qmonth{background:var(--bg-1);border:1px solid var(--line);border-radius:5px;padding:10px;
+  cursor:pointer;transition:all .15s}
+.qmonth:hover{border-color:var(--accent)}
+.qmonth .qm-label{font-family:var(--mono);font-size:10px;color:var(--ink-3);margin-bottom:6px;
+  letter-spacing:.08em;text-transform:uppercase}
+.qmonth .qm-spend{font-family:var(--mono);font-weight:700;font-size:15px;color:var(--ink)}
+.qmonth .qm-bar{height:3px;background:var(--bg-2);border-radius:2px;margin-top:6px;overflow:hidden}
+.qmonth .qm-fill{height:100%;border-radius:2px;background:var(--leak)}
 /* TOAST */
 .toast{position:fixed;bottom:calc(160px + env(safe-area-inset-bottom));left:50%;transform:translate(-50%,20px);
   background:var(--bg-3);border:1px solid var(--line-2);color:var(--ink);padding:11px 16px;
@@ -332,6 +377,50 @@ main{flex:1;padding:18px 18px 120px;max-width:1440px;margin:0 auto;width:100%}
 .spinner{width:14px;height:14px;border:1.5px solid var(--ink-4);border-top-color:var(--accent);
   border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
 @keyframes spin{to{transform:rotate(360deg)}}
+/* PERIOD NAV */
+.period-nav{display:flex;align-items:center;gap:8px;margin-bottom:14px;
+  background:var(--bg-1);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+.pn-btn{width:32px;height:32px;border-radius:5px;background:var(--bg-2);
+  border:1px solid var(--line);color:var(--ink-2);font-size:18px;
+  display:grid;place-items:center;transition:all .15s;flex-shrink:0}
+.pn-btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.pn-btn:disabled{opacity:.3;cursor:default}
+.pn-label{flex:1;font-family:var(--mono);font-size:12px;font-weight:600;
+  color:var(--ink);text-align:center;letter-spacing:.04em}
+.pn-today{padding:5px 12px;border-radius:4px;font-family:var(--mono);font-size:10px;
+  font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  background:color-mix(in srgb,var(--accent) 12%,var(--bg-2));
+  border:1px solid color-mix(in srgb,var(--accent) 40%,var(--line));
+  color:var(--accent);transition:all .15s;flex-shrink:0}
+.pn-today:hover{background:color-mix(in srgb,var(--accent) 20%,var(--bg-2))}
+/* AUDIT SUB-TABS */
+.audit-tabs{display:flex;gap:4px;margin-bottom:14px;
+  background:var(--bg-2);border:1px solid var(--line);border-radius:6px;padding:4px}
+.audit-tab{flex:1;padding:9px 0;font-family:var(--mono);font-size:11px;font-weight:600;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);
+  border-radius:4px;transition:all .15s;text-align:center}
+.audit-tab.active{background:var(--bg);color:var(--accent);
+  box-shadow:0 0 0 1px var(--accent) inset}
+/* AUDIT SUMMARY TABLE */
+.sum-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px}
+.sum-table th{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);
+  text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);font-weight:500}
+.sum-table th:not(:first-child){text-align:right}
+.sum-table td{padding:9px 10px;border-bottom:1px solid var(--line);color:var(--ink-2)}
+.sum-table td:not(:first-child){text-align:right;color:var(--ink)}
+.sum-table tr:last-child td{border-bottom:0}
+.sum-table tr:hover td{background:var(--bg-2)}
+.sum-table .period-label{font-weight:600;color:var(--ink)}
+.sum-table .leak-val{color:var(--leak)}
+.sum-table .invest-val{color:var(--invest)}
+.sum-table .current-row td{background:color-mix(in srgb,var(--accent) 5%,var(--bg-1))}
+/* CAT BREAKDOWN */
+.cat-row{display:flex;align-items:center;gap:10px;padding:10px 14px;
+  border-bottom:1px solid var(--line);cursor:pointer;transition:background .12s}
+.cat-row:hover{background:var(--bg-2)}
+.cat-row:last-child{border-bottom:0}
+.cat-bar-wrap{flex:1;height:4px;background:var(--bg-2);border-radius:2px;overflow:hidden}
+.cat-bar-fill{height:100%;border-radius:2px;transition:width .3s}
 /* TRANSFER FORM */
 .xfer-route{display:grid;grid-template-columns:1fr 36px 1fr;gap:8px;align-items:center;margin-bottom:16px}
 .xfer-arrow{text-align:center;font-size:18px;color:var(--ink-3)}
@@ -406,14 +495,21 @@ const queue = new Q();
 const S = {
   session:null, tab:'today',
   accounts:[], categories:[], budgets:[], goals:[], recurring:[], snapshots:{}, nwHist:[],
-  txToday:[], txWeek:[], txMonth:[], txYear:[],
+  txToday:[], txWeek:[], txMonth:[], txYear:[], allTx:[],
   nw:0, axT:{I:0,P:0,Su:0,L:0}, axW:{I:0,P:0,Su:0,L:0}, axM:{I:0,P:0,Su:0,L:0},
   weekDays:[], monthDays:[],
   kpis:{ spentD:0, inD:0, spentW:0, spentM:0, leakPct:0, savingsRate:0, runway:null },
   online:navigator.onLine, qc:0, currency:'KES',
   masked: localStorage.getItem('ledger:masked')==='1',
+  auditMode:'month',   // 'month'|'quarter'|'year'
+  auditOffset:0,       // 0=current, -1=prev, etc.
   nwLocked: localStorage.getItem('ledger:nwlocked')!=='0', // NW hidden by default until confirmed
   lu: JSON.parse(localStorage.getItem('ledger:lu')||'{}'),
+  // Audit period navigation
+  auditMode: 'month',   // 'week' | 'month' | 'quarter' | 'year'
+  auditOffset: 0,       // 0 = current, -1 = previous, etc.
+  auditTx: [],          // transactions for selected audit period
+  auditLoading: false,
 };
 
 // ── SUPABASE ─────────────────────────────────────────────────
@@ -483,6 +579,7 @@ async function loadMeta(uid){
   S.accounts=acc||[]; S.categories=cat||[];
 }
 async function loadTx(uid){
+  // Load current year for live metrics
   const yr=yrStart().toISOString();
   const {data}=await sb.from('transactions').select('*').eq('user_id',uid).gte('occurred_at',yr).order('occurred_at',{ascending:false});
   const all=data||[]; const td=todayL(),wk=wkStart(),mo=moStart();
@@ -490,6 +587,17 @@ async function loadTx(uid){
   S.txWeek =all.filter(t=>new Date(t.occurred_at)>=wk);
   S.txMonth=all.filter(t=>new Date(t.occurred_at)>=mo);
   S.txYear =all;
+  // Load ALL history for audit tab (up to 5 years back)
+  const fiveYrsAgo=new Date(new Date().getFullYear()-5,0,1).toISOString();
+  if(!S.allTx||S.allTx.length===0||S.allTx.length===all.length){
+    const {data:hist}=await sb.from('transactions').select('*').eq('user_id',uid)
+      .gte('occurred_at',fiveYrsAgo).lt('occurred_at',yr)
+      .order('occurred_at',{ascending:false});
+    S.allTx=[...all,...(hist||[])];
+  } else {
+    // merge current year into allTx
+    S.allTx=[...all,...S.allTx.filter(t=>new Date(t.occurred_at)<yrStart())];
+  }
 }
 async function loadBudgets(uid){ const {data}=await sb.from('budgets').select('*').eq('user_id',uid); S.budgets=data||[]; }
 async function loadGoals(uid){ const {data}=await sb.from('goals').select('*').eq('user_id',uid).eq('is_complete',false).order('priority'); S.goals=data||[]; }
@@ -735,14 +843,14 @@ function vShell(){
       S.online?'LIVE':'OFFLINE',' · ',new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short'}).toUpperCase())
   ));
   const nav=el('div',{class:'bottomnav'});
-  for(const [id,ic,lb] of [['today','·','Today'],['week','#','Week'],['month','≋','Month'],['plan','◎','Plan'],['accounts','≡','Accts'],['settings','⚙','More']]){
+  for(const [id,ic,lb] of [['today','·','Today'],['week','#','Week'],['audit','≋','Audit'],['plan','◎','Plan'],['accounts','≡','Accts'],['settings','⚙','More']]){
     nav.appendChild(el('button',{class:S.tab===id?'active':'',onclick:()=>{S.tab=id;render();}},el('span',{class:'bicon'},ic),lb));
   }
   root.appendChild(nav);
   const m=el('main');
   if(S.tab==='today')    m.appendChild(vToday());
   if(S.tab==='week')     m.appendChild(vWeek());
-  if(S.tab==='month')    m.appendChild(vMonth());
+  if(S.tab==='audit')    m.appendChild(vAudit());
   if(S.tab==='plan')     m.appendChild(vPlan());
   if(S.tab==='accounts') m.appendChild(vAccounts());
   if(S.tab==='settings') m.appendChild(vSettings());
@@ -881,87 +989,293 @@ function vToday(){
 // ── WEEK ─────────────────────────────────────────────────────
 function vWeek(){
   const f=document.createDocumentFragment();
-  const ws=wkStart(),we=addD(ws,6);
-  f.appendChild(sHead('Week of '+dISO(ws),dISO(ws)+' → '+dISO(we)));
-  // Bar chart
-  const cc=el('div',{class:'card',style:{padding:'16px'}});
-  cc.appendChild(el('div',{class:'caps',style:{marginBottom:'8px'}},'Daily · '+S.currency));
-  const maxD=Math.max(1,...S.weekDays.map(d=>d.total));
-  const bars=el('div',{class:'wbars'});
-  const td=dISO(todayL());
-  for(const d of S.weekDays){
-    const w=el('div',{class:'wbw'});
-    const col=el('div',{class:'wbc'});
-    for(const [k,c] of [['L','var(--leak)'],['Su','var(--sustain)'],['P','var(--protect)'],['I','var(--invest)']]){
-      const h=Math.max(0,(d[k]/maxD)*72);
-      if(h<1) continue;
-      col.appendChild(el('div',{class:'wbs',style:{height:h+'px',background:c}}));
+  // Week offset navigation
+  if(!S.weekOffset) S.weekOffset=0;
+  const ws=addD(wkStart(),S.weekOffset*7),we=addD(ws,6);
+  const isCurrentWeek=S.weekOffset===0;
+  // nav
+  const nav=el('div',{class:'period-nav'});
+  const prevBtn=el('button',{class:'pn-btn',onclick:()=>{S.weekOffset--;renderWeekNav();}}, '‹');
+  const nextBtn=el('button',{class:'pn-btn',onclick:()=>{if(S.weekOffset<0){S.weekOffset++;renderWeekNav();}},
+    disabled:isCurrentWeek}, '›');
+  const lbl=el('div',{class:'pn-label'});
+  const todayBtn=el('button',{class:'pn-today',onclick:()=>{S.weekOffset=0;renderWeekNav();},'aria-label':'Today'},
+    isCurrentWeek?'NOW':'JUMP');
+  nav.appendChild(prevBtn); nav.appendChild(lbl); nav.appendChild(todayBtn); nav.appendChild(nextBtn);
+  f.appendChild(nav);
+
+  function renderWeekNav(){
+    const ws2=addD(wkStart(),S.weekOffset*7),we2=addD(ws2,6);
+    lbl.textContent=dISO(ws2)+' → '+dISO(we2);
+    nextBtn.disabled=S.weekOffset>=0;
+    todayBtn.textContent=S.weekOffset===0?'NOW':'JUMP';
+    // reload week data for the selected week
+    loadWeekData(ws2,we2);
+  }
+  renderWeekNav();
+
+  // chart container — will be populated by loadWeekData
+  const chartArea=el('div',{});
+  f.appendChild(chartArea);
+
+  function loadWeekData(ws3,we3){
+    const weekTxs=S.txYear.filter(t=>{
+      const dt=new Date(t.occurred_at);
+      return dt>=ws3&&dt<addD(we3,1);
+    });
+    const isReal=t=>!t.counter_account_id;
+    const amt=t=>Number(t.amount_primary||t.amount||0);
+    const days=[];
+    for(let i=0;i<7;i++){
+      const d=addD(ws3,i),de=addD(d,1);
+      const tx=weekTxs.filter(t=>{const dt=new Date(t.occurred_at);return dt>=d&&dt<de&&t.direction==='out'&&isReal(t)&&t.axis;});
+      const r={date:d,label:dayL(d),I:0,P:0,Su:0,L:0,total:0};
+      for(const t of tx){const a=amt(t);r.total+=a;if(t.axis==='INVEST')r.I+=a;else if(t.axis==='PROTECT')r.P+=a;else if(t.axis==='SUSTAIN')r.Su+=a;else r.L+=a;}
+      days.push(r);
     }
-    w.appendChild(col);
-    w.appendChild(el('div',{class:'wbd'+(dISO(d.date)===td?' today':'')},d.label));
-    w.appendChild(el('div',{class:'wba'},d.total>0?fmt(d.total):''));
-    bars.appendChild(w);
+    const ax={I:days.reduce((s,d)=>s+d.I,0),P:days.reduce((s,d)=>s+d.P,0),
+              Su:days.reduce((s,d)=>s+d.Su,0),L:days.reduce((s,d)=>s+d.L,0)};
+    chartArea.innerHTML='';
+    // bar chart
+    const cc=el('div',{class:'card',style:{padding:'16px'}});
+    const maxD=Math.max(1,...days.map(d=>d.total));
+    const bars=el('div',{class:'wbars'});
+    const td=dISO(todayL());
+    for(const d of days){
+      const w=el('div',{class:'wbw'});
+      const col=el('div',{class:'wbc'});
+      for(const [k,c] of [['L','var(--leak)'],['Su','var(--sustain)'],['P','var(--protect)'],['I','var(--invest)']]){
+        const h=Math.max(0,(d[k]/maxD)*72);if(h<1) continue;
+        col.appendChild(el('div',{class:'wbs',style:{height:h+'px',background:c}}));
+      }
+      w.appendChild(col);
+      w.appendChild(el('div',{class:'wbd'+(dISO(d.date)===td?' today':'')},d.label));
+      w.appendChild(el('div',{class:'wba'},d.total>0?fmt(d.total):''));
+      bars.appendChild(w);
+    }
+    cc.appendChild(bars);
+    const totW=ax.I+ax.P+ax.Su+ax.L||1;
+    const lg=el('div',{class:'axleg',style:{marginTop:'12px'}});
+    for(const [k,a] of [['I','INVEST'],['P','PROTECT'],['Su','SUSTAIN'],['L','LEAK']]){
+      lg.appendChild(el('div',{},el('span',{class:'sw',style:{background:aC(a)}}),a.toLowerCase(),
+        el('span',{class:'pct'},((ax[k]/totW)*100).toFixed(0)+'%')));
+    }
+    cc.appendChild(lg);
+    chartArea.appendChild(cc);
+    // KPIs
+    const ks=el('div',{class:'kpis',style:{marginTop:'10px'}});
+    const spentW=weekTxs.filter(t=>t.direction==='out'&&isReal(t)).reduce((s,t)=>s+amt(t),0);
+    ks.appendChild(kpi('Week spend',fmt(spentW),S.currency));
+    ks.appendChild(kpi('LEAK',((ax.L/totW)*100).toFixed(0)+'%','target <15%',ax.L/totW>.15?'var(--leak)':null));
+    ks.appendChild(kpi('Active days',days.filter(d=>d.total>0).length+'/7','this week'));
+    chartArea.appendChild(ks);
+    // Tx list
+    chartArea.appendChild(sHead('Transactions',weekTxs.length+' entries'));
+    if(!weekTxs.length) chartArea.appendChild(el('div',{class:'card empty'},el('div',{class:'big'},'No entries.')));
+    else for(const t of weekTxs.sort((a,b)=>b.occurred_at.localeCompare(a.occurred_at)).slice(0,80)) chartArea.appendChild(txR(t));
   }
-  cc.appendChild(bars);
-  const totW=S.axW.I+S.axW.P+S.axW.Su+S.axW.L||1;
-  const lg=el('div',{class:'axleg',style:{marginTop:'12px'}});
-  for(const [k,a] of [['I','INVEST'],['P','PROTECT'],['Su','SUSTAIN'],['L','LEAK']]){
-    lg.appendChild(el('div',{},el('span',{class:'sw',style:{background:aC(a)}}),a.toLowerCase(),
-      el('span',{class:'pct'},((S.axW[k]/totW)*100).toFixed(0)+'%')));
-  }
-  cc.appendChild(lg);
-  f.appendChild(cc);
-  const ks=el('div',{class:'kpis',style:{marginTop:'10px'}});
-  ks.appendChild(kpi('Week spend',fmt(S.kpis.spentW),S.currency));
-  ks.appendChild(kpi('LEAK',((S.axW.L/totW)*100).toFixed(0)+'%','target <15%',S.axW.L/totW>.15?'var(--leak)':null));
-  ks.appendChild(kpi('Active days',S.weekDays.filter(d=>d.total>0).length+'/7','this week'));
-  f.appendChild(ks);
-  f.appendChild(sHead('Entries this week',S.txWeek.length+' tx'));
-  if(!S.txWeek.length) f.appendChild(el('div',{class:'card empty'},el('div',{class:'big'},'Nothing yet this week.')));
-  else for(const t of S.txWeek.slice(0,60)) f.appendChild(txR(t));
   return f;
 }
 
-// ── MONTH ────────────────────────────────────────────────────
-function vMonth(){
-  const f=document.createDocumentFragment();
-  const now=new Date();
-  const mo=now.toLocaleDateString('en-GB',{month:'long',year:'numeric'}).toUpperCase();
-  f.appendChild(sHead(mo));
-  // Heatmap
-  const hc=el('div',{class:'card',style:{padding:'16px'}});
-  hc.appendChild(el('div',{class:'caps',style:{marginBottom:'10px'}},'Spend heatmap'));
-  const hw=el('div',{class:'heatmap'});
-  const maxD2=Math.max(1,...S.monthDays.map(d=>d.total));
-  for(const d of S.monthDays){
-    const pct=d.total/maxD2; const alpha=Math.round(pct*210).toString(16).padStart(2,'0');
-    const isToday=dISO(d.date)===dISO(todayL());
-    hw.appendChild(el('div',{class:'hm',
-      style:{background:pct<0.01?'var(--bg-2)':`#ef4444${alpha}`,
-             border:isToday?'1px solid var(--accent)':'1px solid transparent'},
-      title:dISO(d.date)+': '+S.currency+' '+fmtX(d.total)}));
+// ── AUDIT ────────────────────────────────────────────────────
+function auditPeriod(mode,offset){
+  const now=todayL();
+  if(mode==='month'){
+    const d=new Date(now.getFullYear(),now.getMonth()+offset,1);
+    return{label:d.toLocaleDateString('en-GB',{month:'long',year:'numeric'}).toUpperCase(),
+      short:d.toLocaleDateString('en-GB',{month:'short',year:'2-digit'}).toUpperCase(),
+      start:new Date(d.getFullYear(),d.getMonth(),1),
+      end:new Date(d.getFullYear(),d.getMonth()+1,0,23,59,59),isCurrent:offset===0};
   }
-  hc.appendChild(hw);
-  hc.appendChild(el('div',{style:{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--ink-4)',marginTop:'6px'}},
-    'Each cell = 1 day · Red = high spend · Outlined = today'));
-  f.appendChild(hc);
-  const inM=S.txMonth.filter(t=>t.direction==='in').reduce((s,t)=>s+Number(t.amount_primary||t.amount||0),0);
-  const totM=S.axM.I+S.axM.P+S.axM.Su+S.axM.L||1;
-  const ks=el('div',{class:'kpis',style:{marginTop:'10px'}});
-  ks.appendChild(kpi('Month out',fmt(S.kpis.spentM),S.currency));
-  ks.appendChild(kpi('Month in',fmt(inM),S.currency));
-  ks.appendChild(kpi('Net',fmt(inM-S.kpis.spentM),S.currency,inM>=S.kpis.spentM?'var(--invest)':'var(--leak)'));
-  ks.appendChild(kpi('Save rate',S.kpis.savingsRate.toFixed(0)+'%','I+P / in'));
-  ks.appendChild(kpi('INVEST',fmt(S.axM.I),((S.axM.I/totM)*100).toFixed(0)+'%'));
-  ks.appendChild(kpi('LEAK',fmt(S.axM.L),((S.axM.L/totM)*100).toFixed(0)+'%',S.axM.L/totM>.2?'var(--leak)':null));
-  f.appendChild(ks);
-  // Axis breakdown card
-  const axc=el('div',{class:'card',style:{padding:'16px',marginTop:'10px'}});
-  axc.appendChild(el('div',{class:'caps',style:{marginBottom:'8px'}},'Month axis split'));
-  axc.appendChild(axBar(S.axM,true));
-  f.appendChild(axc);
-  f.appendChild(sHead('All transactions',S.txMonth.length+' entries'));
-  for(const t of S.txMonth.slice(0,100)) f.appendChild(txR(t));
+  if(mode==='quarter'){
+    const curQ=Math.floor(now.getMonth()/3);
+    const tQ=curQ+offset;
+    const year=now.getFullYear()+Math.floor(tQ/4);
+    const qNum=((tQ%4)+4)%4;
+    const sm=qNum*3;
+    return{label:`Q${qNum+1} ${year}`,short:`Q${qNum+1}-${String(year).slice(2)}`,
+      start:new Date(year,sm,1),end:new Date(year,sm+3,0,23,59,59),isCurrent:offset===0};
+  }
+  const year=now.getFullYear()+offset;
+  return{label:String(year),short:String(year),
+    start:new Date(year,0,1),end:new Date(year,11,31,23,59,59),isCurrent:offset===0};
+}
+
+function getPeriodTxs(period){
+  return S.allTx.filter(t=>{const dt=new Date(t.occurred_at);return dt>=period.start&&dt<=period.end;});
+}
+
+function periodSummary(txs){
+  const isReal=t=>!t.counter_account_id;
+  const amt=t=>Number(t.amount_primary||t.amount||0);
+  const out=txs.filter(t=>t.direction==='out'&&isReal(t)&&t.axis);
+  const inc=txs.filter(t=>t.direction==='in'&&isReal(t));
+  const xfer=txs.filter(t=>t.counter_account_id&&t.direction==='out');
+  const ax={INVEST:0,PROTECT:0,SUSTAIN:0,LEAK:0};
+  out.forEach(t=>ax[t.axis]=(ax[t.axis]||0)+amt(t));
+  const axTot=Object.values(ax).reduce((a,b)=>a+b,0)||1;
+  const totalOut=out.reduce((s,t)=>s+amt(t),0);
+  const totalIn=inc.reduce((s,t)=>s+amt(t),0);
+  const deployed=ax.INVEST+ax.PROTECT+xfer.reduce((s,t)=>s+amt(t),0);
+  return{totalOut,totalIn,net:totalIn-totalOut,ax,axTot,
+    leakPct:ax.LEAK/axTot*100,savePct:totalIn>0?deployed/totalIn*100:0};
+}
+
+function vAudit(){
+  const f=document.createDocumentFragment();
+  const isReal=t=>!t.counter_account_id;
+  const amt=t=>Number(t.amount_primary||t.amount||0);
+
+  // Sub-tabs
+  const tabs=el('div',{class:'audit-tabs'});
+  for(const [mode,lbl] of [['month','Monthly'],['quarter','Quarterly'],['year','Annual']]){
+    const b=el('button',{class:'audit-tab'+(S.auditMode===mode?' active':''),
+      onclick:()=>{S.auditMode=mode;S.auditOffset=0;render();}},lbl);
+    tabs.appendChild(b);
+  }
+  f.appendChild(tabs);
+
+  // Period nav
+  const period=auditPeriod(S.auditMode,S.auditOffset);
+  const nav=el('div',{class:'period-nav'});
+  const prevBtn=el('button',{class:'pn-btn',onclick:()=>{S.auditOffset--;render();}},'‹');
+  const nextBtn=el('button',{class:'pn-btn',disabled:S.auditOffset>=0,
+    onclick:()=>{if(S.auditOffset<0){S.auditOffset++;render();}}},'›');
+  const plbl=el('div',{class:'pn-label'},period.label);
+  const nowBtn=el('button',{class:'pn-today',onclick:()=>{S.auditOffset=0;render();}},
+    period.isCurrent?'NOW':'JUMP NOW');
+  nav.appendChild(prevBtn);nav.appendChild(plbl);nav.appendChild(nowBtn);nav.appendChild(nextBtn);
+  f.appendChild(nav);
+
+  // Get transactions
+  const txs=getPeriodTxs(period);
+  const sm=periodSummary(txs);
+
+  // KPIs
+  const kpis=el('div',{class:'kpis',style:{gridTemplateColumns:'repeat(2,1fr)'}});
+  kpis.appendChild(kpi('Total out',S.masked?'••••':fmt(sm.totalOut),S.currency,sm.totalOut>0?'var(--leak)':null));
+  kpis.appendChild(kpi('Total in', S.masked?'••••':fmt(sm.totalIn), S.currency,sm.totalIn>0?'var(--invest)':null));
+  kpis.appendChild(kpi('Net flow', S.masked?'••••':fmt(sm.net),     S.currency,sm.net>=0?'var(--invest)':'var(--leak)'));
+  kpis.appendChild(kpi('Save rate',sm.savePct.toFixed(0)+'%','of income',sm.savePct>30?'var(--invest)':null));
+  kpis.appendChild(kpi('Leak %',   sm.leakPct.toFixed(0)+'%','of spend',sm.leakPct>20?'var(--leak)':null));
+  kpis.appendChild(kpi('Tx count', String(txs.filter(t=>isReal(t)).length),'entries'));
+  f.appendChild(kpis);
+
+  // Axis bar
+  if(sm.totalOut>0){
+    const axCard=el('div',{class:'card',style:{padding:'14px 16px',marginTop:'10px'}});
+    axCard.appendChild(el('div',{class:'caps',style:{marginBottom:'8px'}},'Axis split · period spend'));
+    const bar=el('div',{class:'axbar'});
+    for(const a of ['INVEST','PROTECT','SUSTAIN','LEAK']){
+      const pct=(sm.ax[a]/sm.axTot)*100;
+      bar.appendChild(el('span',{style:{background:aC(a),flexBasis:pct+'%',flexGrow:pct>0?1:0,flexShrink:1}}));
+    }
+    axCard.appendChild(bar);
+    const lg=el('div',{class:'axleg',style:{marginTop:'10px'}});
+    for(const a of ['INVEST','PROTECT','SUSTAIN','LEAK'])
+      lg.appendChild(el('div',{},el('span',{class:'sw',style:{background:aC(a)}}),
+        a.toLowerCase(),el('span',{class:'pct'},S.masked?'••':fmt(sm.ax[a]))));
+    axCard.appendChild(lg);
+    f.appendChild(axCard);
+  }
+
+  // Comparison table — last N periods
+  const nPeriods=S.auditMode==='year'?5:S.auditMode==='quarter'?8:12;
+  f.appendChild(el('div',{class:'sh',style:{marginTop:'18px'}},
+    el('div',{class:'t'},'Trend — last '+nPeriods+' periods')));
+  const compCard=el('div',{class:'card',style:{overflowX:'auto'}});
+  const tbl=el('table',{class:'sum-table'});
+  const hrow=el('tr',{});
+  for(const h of ['Period','In','Out','Net','Leak%','Save%'])
+    hrow.appendChild(el('th',{},h));
+  tbl.appendChild(el('thead',{},hrow));
+  const tbody=el('tbody',{});
+  for(let i=-(nPeriods-1);i<=0;i++){
+    const p=auditPeriod(S.auditMode,S.auditOffset+i);
+    const ptxs=getPeriodTxs(p);
+    const ps=periodSummary(ptxs);
+    const isCur=i===0;
+    const tr=el('tr',{class:isCur?'current-row':''});
+    tr.appendChild(el('td',{class:'period-label'},p.short));
+    tr.appendChild(el('td',{class:'invest-val'},ps.totalIn>0?fmt(ps.totalIn):'—'));
+    tr.appendChild(el('td',{},ps.totalOut>0?fmt(ps.totalOut):'—'));
+    tr.appendChild(el('td',{style:{color:ps.net>=0?'var(--invest)':'var(--leak)'}},
+      ps.net!==0?fmt(ps.net):'—'));
+    tr.appendChild(el('td',{class:ps.leakPct>20?'leak-val':''},ps.totalOut>0?ps.leakPct.toFixed(0)+'%':'—'));
+    tr.appendChild(el('td',{class:ps.savePct>30?'invest-val':''},ps.savePct>0?ps.savePct.toFixed(0)+'%':'—'));
+    tbody.appendChild(tr);
+  }
+  tbl.appendChild(tbody);
+  compCard.appendChild(tbl);
+  f.appendChild(compCard);
+
+  // Category breakdown
+  const outTxs=txs.filter(t=>t.direction==='out'&&isReal(t)&&t.axis);
+  if(outTxs.length>0){
+    f.appendChild(el('div',{class:'sh',style:{marginTop:'18px'}},
+      el('div',{class:'t'},'By category'),
+      el('div',{class:'m'},outTxs.length+' entries')));
+    const catMap={};
+    for(const t of outTxs){
+      const cat=S.categories.find(c=>c.id===t.category_id);
+      const name=cat?.name||'Uncategorised';
+      if(!catMap[name]) catMap[name]={name,ax:t.axis,total:0,count:0};
+      catMap[name].total+=amt(t);catMap[name].count++;
+    }
+    const catList=Object.values(catMap).sort((a,b)=>b.total-a.total);
+    const maxCat=catList[0]?.total||1;
+    const catCard=el('div',{class:'card'});
+    for(const c of catList){
+      const pct=(c.total/sm.totalOut*100).toFixed(1);
+      const row=el('div',{class:'cat-row'});
+      row.appendChild(el('div',{style:{width:'8px',height:'8px',borderRadius:'2px',
+        background:aC(c.ax),flexShrink:0}}));
+      row.appendChild(el('div',{style:{flex:'1',minWidth:0,paddingRight:'8px'}},
+        el('div',{style:{fontSize:'13px',fontWeight:'500',color:'var(--ink)',
+          whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},c.name),
+        el('div',{style:{height:'3px',background:'var(--bg-2)',borderRadius:'2px',
+          overflow:'hidden',marginTop:'5px'}},
+          el('div',{style:{height:'100%',width:(c.total/maxCat*100)+'%',
+            background:aC(c.ax),borderRadius:'2px'}}))
+      ));
+      row.appendChild(el('div',{style:{textAlign:'right',flexShrink:0}},
+        el('div',{style:{fontFamily:'var(--mono)',fontWeight:'600',fontSize:'13px'}},
+          S.masked?'••••':fmt(c.total)),
+        el('div',{style:{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--ink-3)',marginTop:'2px'}},
+          pct+'%  ·  '+c.count+'×')
+      ));
+      catCard.appendChild(row);
+    }
+    f.appendChild(catCard);
+  }
+
+  // Full transaction ledger grouped by date
+  f.appendChild(el('div',{class:'sh',style:{marginTop:'18px'}},
+    el('div',{class:'t'},'Full ledger'),
+    el('div',{class:'m'},txs.length+' transactions')));
+  if(!txs.length){
+    f.appendChild(el('div',{class:'card empty'},
+      el('div',{class:'big'},'Nothing here.'),
+      el('div',{class:'sm'},'No transactions in this period.')));
+  } else {
+    const sorted=[...txs].sort((a,b)=>b.occurred_at.localeCompare(a.occurred_at));
+    const byDate={};
+    for(const t of sorted){
+      const dk=new Date(t.occurred_at).toLocaleDateString('en-GB',
+        {weekday:'short',day:'2-digit',month:'short'}).toUpperCase();
+      if(!byDate[dk]) byDate[dk]=[];
+      byDate[dk].push(t);
+    }
+    for(const [dk,dayTxs] of Object.entries(byDate)){
+      const dayOut=dayTxs.filter(t=>t.direction==='out'&&isReal(t)&&t.axis).reduce((s,t)=>s+amt(t),0);
+      const dayLabel=el('div',{class:'txgl',style:{display:'flex',justifyContent:'space-between'}});
+      dayLabel.appendChild(el('span',{},dk));
+      if(dayOut>0) dayLabel.appendChild(el('span',{style:{color:'var(--leak)',fontFamily:'var(--mono)',fontSize:'10px'}},
+        S.masked?'••••':fmt(dayOut)));
+      f.appendChild(dayLabel);
+      for(const t of dayTxs) f.appendChild(txR(t));
+    }
+  }
   return f;
 }
 

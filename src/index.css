@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg:       #07070f;
+  --bg-1:     #0d0d18;
+  --bg-2:     #121220;
+  --bg-3:     #181828;
+  --line:     #1c1c30;
+  --line-2:   #252540;
+  --ink:      #ddddf0;
+  --ink-2:    #9999b8;
+  --ink-3:    #666688;
+  --ink-4:    #3a3a58;
+  --accent:   #00e676;
+  --invest:   #00e676;
+  --protect:  #4488ff;
+  --sustain:  #ffaa00;
+  --leak:     #ff3355;
+}
+
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overscroll-behavior-y: none; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-top: env(safe-area-inset-top);
+    -webkit-tap-highlight-color: transparent;
+  }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  input, select, textarea { font: inherit; color: inherit; }
+  input::placeholder, textarea::placeholder { color: var(--ink-4); }
+  select option { background: var(--bg-2); color: var(--ink); }
+  #root { min-height: 100vh; display: flex; flex-direction: column; }
+}
+
+@layer utilities {
+  .caps {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 10px;
+    font-weight: 500;
+  }
+  .dvh { height: 100dvh; }
+  .min-dvh { min-height: 100dvh; }
+}

@@ -229,7 +229,7 @@ export function AuditView({ userId }: AuditViewProps) {
               {txs.map((t) => (
                 <TxRow
                   key={t.id} tx={t} accounts={accounts} masked={masked}
-                  onEdit={(tx) => { setEditTx(tx); setLogOpen(true) }}
+                  onEdit={t.counter_account_id ? undefined : (tx) => { setEditTx(tx); setLogOpen(true) }}
                 />
               ))}
             </div>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 
 interface PinModalProps {
@@ -33,11 +34,12 @@ export function PinModal({ open, onSuccess, onClose }: PinModalProps) {
     }
   }
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
+          className="fixed inset-0 flex items-center justify-center bg-black/80"
+          style={{ zIndex: 300 }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -80,6 +82,7 @@ export function PinModal({ open, onSuccess, onClose }: PinModalProps) {
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   )
 }

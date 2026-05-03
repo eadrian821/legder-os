@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence, type PanInfo } from 'framer-motion'
 
 interface SheetProps {
@@ -17,19 +18,29 @@ export function Sheet({ open, onClose, title, children }: SheetProps) {
     return () => document.removeEventListener('keydown', handler)
   }, [open, onClose])
 
+  // Prevent body scroll while open
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => { document.body.style.overflow = '' }
+  }, [open])
+
   const handleDragEnd = (_: unknown, info: PanInfo) => {
-    // Dismiss if dragged far enough down OR flicked fast enough
     if (info.offset.y > 80 || info.velocity.y > 400) onClose()
   }
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
           {/* Backdrop */}
           <motion.div
             key="sheet-backdrop"
-            className="fixed inset-0 z-40 bg-black"
+            className="fixed inset-0 bg-black"
+            style={{ zIndex: 200 }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 0.7 }}
             exit={{ opacity: 0 }}
@@ -40,8 +51,9 @@ export function Sheet({ open, onClose, title, children }: SheetProps) {
           {/* Panel */}
           <motion.div
             key="sheet-panel"
-            className="fixed bottom-0 left-0 right-0 z-50 rounded-t-lg border-t border-[var(--line)] overflow-hidden"
+            className="fixed bottom-0 left-0 right-0 rounded-t-lg border-t border-[var(--line)] overflow-hidden"
             style={{
+              zIndex: 201,
               background: 'var(--bg-1)',
               maxHeight: '92dvh',
               paddingBottom: 'env(safe-area-inset-bottom)',
@@ -52,11 +64,10 @@ export function Sheet({ open, onClose, title, children }: SheetProps) {
             transition={{ type: 'spring', stiffness: 400, damping: 40 }}
             drag="y"
             dragConstraints={{ top: 0, bottom: 0 }}
-            // Allow small upward overscroll (elastic feel), free downward
             dragElastic={{ top: 0.05, bottom: 0.4 }}
             onDragEnd={handleDragEnd}
           >
-            {/* Grab handle — pulses on mount to signal draggability */}
+            {/* Grab handle */}
             <div className="flex justify-center pt-3 pb-2 cursor-grab active:cursor-grabbing">
               <motion.div
                 className="rounded-full"
@@ -84,6 +95,7 @@ export function Sheet({ open, onClose, title, children }: SheetProps) {
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   )
 }

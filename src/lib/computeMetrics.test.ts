@@ -23,6 +23,7 @@ function makeTx(overrides: Partial<Transaction> & Pick<Transaction, 'account_id'
     user_id: 'u1',
     occurred_at: new Date().toISOString(),
     description: 'test',
+    currency: 'KES',
     axis: null,
     category_id: null,
     counter_account_id: null,

@@ -10,9 +10,9 @@ export interface Database {
         Relationships: []
       }
       transactions: {
-        Row:    { id: string; user_id: string; account_id: string; occurred_at: string; description: string; amount: number; direction: string; axis: string | null; category_id: string | null; counter_account_id: string | null; created_at: string }
-        Insert: { id: string; user_id: string; account_id: string; occurred_at: string; description: string; amount: number; direction: string; axis?: string | null; category_id?: string | null; counter_account_id?: string | null; created_at?: string }
-        Update: { id?: string; user_id?: string; account_id?: string; occurred_at?: string; description?: string; amount?: number; direction?: string; axis?: string | null; category_id?: string | null; counter_account_id?: string | null; created_at?: string }
+        Row:    { id: string; user_id: string; account_id: string; occurred_at: string; description: string; amount: number; currency: string; direction: string; axis: string | null; category_id: string | null; counter_account_id: string | null; created_at: string }
+        Insert: { id: string; user_id: string; account_id: string; occurred_at: string; description: string; amount: number; currency: string; direction: string; axis?: string | null; category_id?: string | null; counter_account_id?: string | null; created_at?: string }
+        Update: { id?: string; user_id?: string; account_id?: string; occurred_at?: string; description?: string; amount?: number; currency?: string; direction?: string; axis?: string | null; category_id?: string | null; counter_account_id?: string | null; created_at?: string }
         Relationships: []
       }
       categories: {

@@ -81,7 +81,7 @@ export function useInsertTransaction(userId: string) {
       const row: Database['public']['Tables']['transactions']['Insert'] = {
         id: tx.id, user_id: userId, account_id: tx.account_id,
         occurred_at: tx.occurred_at, description: tx.description,
-        amount: tx.amount, direction: tx.direction, axis: tx.axis,
+        amount: tx.amount, currency: tx.currency ?? 'KES', direction: tx.direction, axis: tx.axis,
         category_id: tx.category_id, counter_account_id: tx.counter_account_id,
       }
       const { data, error } = await sb

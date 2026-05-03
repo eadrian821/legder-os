@@ -37,16 +37,18 @@ export function TransferForm({ accounts, userId, onSubmit, onClose }: TransferFo
     e.preventDefault()
     if (!amt || fromId === toId) { toast('Select different accounts and enter amount'); return }
     const occurred_at = `${date}T${time}:00`
+    const fromCurrency = accounts.find((a) => a.id === fromId)?.currency ?? 'KES'
+    const toCurrency   = accounts.find((a) => a.id === toId)?.currency   ?? 'KES'
     const outLeg: Omit<Transaction, 'created_at'> = {
       id: uid(), user_id: userId, account_id: fromId, occurred_at,
       description: `Transfer to ${accounts.find(a => a.id === toId)?.name}`,
-      amount: amt, direction: 'out', axis: null, category_id: null,
+      amount: amt, currency: fromCurrency, direction: 'out', axis: null, category_id: null,
       counter_account_id: toId,
     }
     const inLeg: Omit<Transaction, 'created_at'> = {
       id: uid(), user_id: userId, account_id: toId, occurred_at,
       description: `Transfer from ${accounts.find(a => a.id === fromId)?.name}`,
-      amount: amt, direction: 'in', axis: null, category_id: null,
+      amount: amt, currency: toCurrency, direction: 'in', axis: null, category_id: null,
       counter_account_id: fromId,
     }
     let feeTx: Omit<Transaction, 'created_at'> | undefined
@@ -54,7 +56,7 @@ export function TransferForm({ accounts, userId, onSubmit, onClose }: TransferFo
       feeTx = {
         id: uid(), user_id: userId, account_id: fromId, occurred_at,
         description: `Transfer fee (${route})`,
-        amount: feeAmt, direction: 'out', axis: 'LEAK', category_id: null,
+        amount: feeAmt, currency: fromCurrency, direction: 'out', axis: 'LEAK', category_id: null,
         counter_account_id: null,
       }
     }

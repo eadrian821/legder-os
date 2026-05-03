@@ -18,6 +18,7 @@ export interface Transaction {
   occurred_at: string
   description: string
   amount: number
+  currency: string
   direction: 'in' | 'out'
   axis: Axis | null
   category_id: string | null

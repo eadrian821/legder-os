@@ -41,7 +41,7 @@ export function useOfflineQueue(userId: string | undefined) {
         const row: Database['public']['Tables']['transactions']['Insert'] = {
           id: item.payload.id, user_id: item.payload.user_id, account_id: item.payload.account_id,
           occurred_at: item.payload.occurred_at, description: item.payload.description,
-          amount: item.payload.amount, direction: item.payload.direction,
+          amount: item.payload.amount, currency: item.payload.currency ?? 'KES', direction: item.payload.direction,
           axis: item.payload.axis, category_id: item.payload.category_id,
           counter_account_id: item.payload.counter_account_id,
         }

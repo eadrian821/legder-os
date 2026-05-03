@@ -47,6 +47,7 @@ export function LogForm({ accounts, categories, userId, editTx, onSubmit, onDele
         occurred_at: `${date}T${time}:00`,
         description: description.trim(),
         amount: parseFloat(amount),
+        currency: accounts.find((a) => a.id === accountId)?.currency ?? 'KES',
         direction,
         axis: axis || null,
         category_id: categoryId || null,

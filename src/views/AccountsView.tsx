@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, AlertTriangle, GitMerge } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAccounts, useUpsertAccount, useDeleteAccount, accountKeys } from '@/hooks/useAccounts'
 import { useTransactions, txKeys, useInsertTransaction, useDeleteTransaction } from '@/hooks/useTransactions'
@@ -13,6 +13,7 @@ import { LogForm } from '@/components/forms/LogForm'
 import { AccountDetailSheet } from '@/components/ui/AccountDetailSheet'
 import { ACCOUNT_KIND_LABELS, isLiquidKind, isInvestmentKind } from '@/constants/accounts'
 import { fmtX } from '@/lib/utils'
+import { sb } from '@/lib/supabase'
 import { useToast } from '@/components/ui/Toast'
 import type { Account, Transaction } from '@/types/ledger'
 import type { AccountKind } from '@/constants/accounts'
@@ -145,6 +146,39 @@ export function AccountsView({ userId }: AccountsViewProps) {
     toast('Balances refreshed')
   }
 
+  // Detect accounts sharing the same name (case-insensitive)
+  const duplicateGroups = useMemo(() => {
+    const groups = new Map<string, Account[]>()
+    for (const a of accounts) {
+      const key = a.name.toLowerCase().trim()
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key)!.push(a)
+    }
+    return Array.from(groups.values()).filter((g) => g.length > 1)
+  }, [accounts])
+
+  // Merge duplicate: reassign all txs from deleteId → keepId, then delete
+  const [merging, setMerging] = useState<string | null>(null)
+  const mergeAccounts = async (keepId: string, deleteId: string) => {
+    setMerging(deleteId)
+    try {
+      await sb.from('transactions').update({ account_id: keepId }).eq('account_id', deleteId)
+      await sb.from('transactions').update({ counter_account_id: keepId }).eq('counter_account_id', deleteId)
+      const { error } = await sb.from('accounts').delete().eq('id', deleteId)
+      if (error) throw error
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: accountKeys.all(userId) }),
+        qc.invalidateQueries({ queryKey: txKeys.year(userId) }),
+        qc.invalidateQueries({ queryKey: txKeys.history(userId) }),
+      ])
+      toast('Duplicate merged successfully')
+    } catch (err) {
+      toast((err as Error)?.message ?? 'Merge failed')
+    } finally {
+      setMerging(null)
+    }
+  }
+
   const pieData = accounts
     .map((a) => ({
       name:  a.name,
@@ -257,6 +291,55 @@ export function AccountsView({ userId }: AccountsViewProps) {
         </div>
       )}
 
+      {/* Duplicate account warnings */}
+      {duplicateGroups.length > 0 && (
+        <div className="px-4 mb-4 space-y-2">
+          {duplicateGroups.map((group) => {
+            const txCountOf = (id: string) => allTx.filter((t) => t.account_id === id).length
+            return (
+              <div
+                key={group[0].name}
+                className="rounded-lg p-3"
+                style={{ background: 'rgba(255,170,0,0.06)', border: '1px solid rgba(255,170,0,0.25)' }}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertTriangle size={11} style={{ color: '#ffaa00' }} />
+                  <span className="text-xs font-medium" style={{ color: '#ffaa00' }}>
+                    {group.length} duplicate accounts named "{group[0].name}"
+                  </span>
+                </div>
+                <div className="space-y-1.5">
+                  {group.map((a, i) => {
+                    const bal = accountBalances[a.id] ?? 0
+                    const cnt = txCountOf(a.id)
+                    return (
+                      <div key={a.id} className="flex items-center justify-between">
+                        <div className="text-[10px] font-mono text-ink-3">
+                          <span className="text-ink-4 mr-1">{i === 0 ? '★ primary' : '  copy'}</span>
+                          {masked ? '••••' : `KES ${fmtX(bal)}`}
+                          <span className="text-ink-4 ml-1.5">{cnt} txns · created {a.created_at.slice(0, 10)}</span>
+                        </div>
+                        {i > 0 && (
+                          <button
+                            disabled={merging === a.id}
+                            onClick={() => mergeAccounts(group[0].id, a.id)}
+                            className="flex items-center gap-1 text-[10px] px-2.5 py-1 rounded border transition-colors disabled:opacity-50"
+                            style={{ borderColor: 'rgba(255,170,0,0.4)', color: '#ffaa00' }}
+                          >
+                            <GitMerge size={9} />
+                            {merging === a.id ? 'Merging…' : 'Merge into primary'}
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
       {/* Account cards */}
       <div className="px-4 mb-4 space-y-3">
         {accounts.map((a, i) => (
@@ -291,6 +374,8 @@ export function AccountsView({ userId }: AccountsViewProps) {
         masked={masked}
         color={detailAcc ? (KIND_COLORS[detailAcc.kind] ?? '#ffffff') : '#ffffff'}
         onEditTx={(tx) => { setEditTx(tx); setLogOpen(true) }}
+        onDeleteTx={async (id) => { await deleteTx.mutateAsync(id) }}
+        onInsertTx={async (tx) => { await insertTx.mutateAsync(tx) }}
         onEditAccount={() => {
           setEditAcc(detailAcc)
           setDetailOpen(false)

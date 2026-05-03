@@ -4,7 +4,8 @@ import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
 import {
-  AlertTriangle, ArrowDownLeft, ArrowUpRight, Pencil, TrendingUp, TrendingDown, Zap,
+  AlertTriangle, ArrowDownLeft, ArrowUpRight, Pencil, TrendingUp, TrendingDown,
+  Zap, Check, X, Trash2, Edit3, SlidersHorizontal,
 } from 'lucide-react'
 import { Sheet } from './Sheet'
 import { TxRow } from './TxRow'
@@ -12,7 +13,7 @@ import { NumberTicker } from './NumberTicker'
 import type { Account, Transaction } from '@/types/ledger'
 import { AXIS_COLORS } from '@/constants/axes'
 import { ACCOUNT_KIND_LABELS } from '@/constants/accounts'
-import { fmtX, fmt } from '@/lib/utils'
+import { fmtX, fmt, uid } from '@/lib/utils'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -33,6 +34,8 @@ interface Props {
   masked: boolean
   color: string
   onEditTx: (tx: Transaction) => void
+  onDeleteTx?: (id: string) => Promise<void>
+  onInsertTx?: (tx: Omit<Transaction, 'created_at'>) => Promise<void>
   onEditAccount: () => void
 }
 
@@ -103,16 +106,56 @@ function FlowKpi({
   )
 }
 
-function AnomalyRow({ flag }: { flag: AnomalyFlag }) {
+function AnomalyRow({
+  flag, tx, onEdit, onDelete,
+}: {
+  flag: AnomalyFlag
+  tx?: Transaction
+  onEdit?: (tx: Transaction) => void
+  onDelete?: (id: string) => Promise<void>
+}) {
+  const [deleting, setDeleting] = useState(false)
   const c = flag.kind === 'no-axis' ? 'var(--sustain)' : flag.kind === 'large' ? 'var(--leak)' : '#ffaa00'
+
   return (
     <motion.div
       initial={{ opacity: 0, x: -8 }}
       animate={{ opacity: 1, x: 0 }}
-      className="flex items-start gap-2 py-1.5"
+      className="py-2"
     >
-      <AlertTriangle size={11} style={{ color: c, flexShrink: 0, marginTop: 1 }} />
-      <span className="text-[11px] text-ink-3 leading-tight">{flag.label}</span>
+      <div className="flex items-start gap-2">
+        <AlertTriangle size={11} style={{ color: c, flexShrink: 0, marginTop: 2 }} />
+        <span className="text-[11px] text-ink-3 leading-tight flex-1">{flag.label}</span>
+      </div>
+      {tx && (
+        <div className="flex items-center gap-1.5 mt-1.5 ml-4">
+          {onEdit && (
+            <button
+              onClick={() => onEdit(tx)}
+              className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md border transition-colors hover:text-ink"
+              style={{ borderColor: 'var(--line)', color: 'var(--ink-3)' }}
+            >
+              <Edit3 size={9} />
+              {flag.kind === 'no-axis' ? 'Fix axis' : 'Edit'}
+            </button>
+          )}
+          {onDelete && flag.kind === 'duplicate' && (
+            <button
+              disabled={deleting}
+              onClick={async () => {
+                setDeleting(true)
+                await onDelete(tx.id).catch(() => null)
+                setDeleting(false)
+              }}
+              className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md border transition-colors"
+              style={{ borderColor: 'rgba(255,51,85,0.3)', color: 'var(--leak)' }}
+            >
+              <Trash2 size={9} />
+              {deleting ? '…' : 'Delete dupe'}
+            </button>
+          )}
+        </div>
+      )}
     </motion.div>
   )
 }
@@ -134,10 +177,13 @@ function ChartTooltip({ active, payload }: { active?: boolean; payload?: Array<{
 
 export function AccountDetailSheet({
   open, onClose, account, allTx, allAccounts, masked, color,
-  onEditTx, onEditAccount,
+  onEditTx, onDeleteTx, onInsertTx, onEditAccount,
 }: Props) {
   const [period, setPeriod] = useState<PeriodKey>('1m')
   const [showAnomalies, setShowAnomalies] = useState(true)
+  const [reconcileOpen, setReconcileOpen] = useState(false)
+  const [reconcileTarget, setReconcileTarget] = useState('')
+  const [reconciling, setReconciling] = useState(false)
 
   const accountId = account?.id
 
@@ -208,6 +254,9 @@ export function AccountDetailSheet({
   const anomalies = useMemo(() => detectAnomalies(periodTx), [periodTx])
   const anomalyTxIds = useMemo(() => new Set(anomalies.map((a) => a.txId)), [anomalies])
 
+  // Build a map for quick tx lookup by id
+  const txById = useMemo(() => new Map(periodTx.map((t) => [t.id, t])), [periodTx])
+
   // Ledger grouped by date (descending)
   const groupedByDate = useMemo(() => {
     const map = new Map<string, Transaction[]>()
@@ -225,8 +274,36 @@ export function AccountDetailSheet({
     ? (currentBalance < 0 ? 'var(--leak)' : 'var(--ink-2)')
     : net >= 0 ? color : 'var(--leak)'
 
+  const handleReconcile = async () => {
+    if (!onInsertTx || !account) return
+    const target = parseFloat(reconcileTarget.replace(/,/g, ''))
+    if (isNaN(target)) return
+    const diff = Math.round((target - currentBalance) * 100) / 100
+    if (Math.abs(diff) < 0.5) { setReconcileOpen(false); return }
+    setReconciling(true)
+    try {
+      const now = new Date()
+      await onInsertTx({
+        id: uid(),
+        user_id: account.user_id,
+        account_id: account.id,
+        occurred_at: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}T${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:00`,
+        description: 'Balance adjustment',
+        amount: Math.abs(diff),
+        currency: account.currency,
+        direction: diff > 0 ? 'in' : 'out',
+        axis: diff < 0 ? 'LEAK' : null,
+        category_id: null,
+        counter_account_id: null,
+      })
+      setReconcileOpen(false)
+      setReconcileTarget('')
+    } finally {
+      setReconciling(false)
+    }
+  }
+
   // Always render the Sheet — let `open` prop control visibility
-  // (avoids mount-with-open=true timing issues with AnimatePresence)
   return (
     <Sheet open={open} onClose={onClose}>
       {!account ? (
@@ -280,6 +357,14 @@ export function AccountDetailSheet({
                 color={balColor}
                 format="full"
               />
+              {currentBalance < 0 && !isCredit && (
+                <div
+                  className="mt-1 text-[10px] font-mono px-2 py-0.5 rounded inline-flex items-center gap-1"
+                  style={{ background: 'rgba(255,51,85,0.12)', color: 'var(--leak)' }}
+                >
+                  ⚠ Negative — possible missing credit or entry error
+                </div>
+              )}
             </div>
 
             {/* Net flow indicator */}
@@ -291,6 +376,64 @@ export function AccountDetailSheet({
                 <span className="font-mono text-[10px]" style={{ color: net > 0 ? 'var(--invest)' : 'var(--leak)' }}>
                   {masked ? '••••' : `${net > 0 ? '+' : '−'}${fmtX(Math.abs(net))} this period`}
                 </span>
+              </div>
+            )}
+
+            {/* Reconcile trigger */}
+            {onInsertTx && (
+              <div className="relative mt-3">
+                {!reconcileOpen ? (
+                  <button
+                    onClick={() => { setReconcileOpen(true); setReconcileTarget(String(currentBalance)) }}
+                    className="flex items-center gap-1.5 text-[10px] text-ink-4 hover:text-ink-2 transition-colors"
+                  >
+                    <SlidersHorizontal size={10} />
+                    Reconcile balance
+                  </button>
+                ) : (
+                  <motion.div
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded-lg p-3"
+                    style={{ background: 'var(--bg-2)', border: '1px solid var(--line)' }}
+                  >
+                    <div className="caps text-[9px] text-ink-4 mb-2">Enter true balance (KES)</div>
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        className="flex-1 rounded-md px-2.5 py-1.5 text-sm font-mono text-ink focus:outline-none"
+                        style={{ background: 'var(--bg-3)', border: '1px solid var(--line)' }}
+                        value={reconcileTarget}
+                        onChange={(e) => setReconcileTarget(e.target.value)}
+                        autoFocus
+                        onKeyDown={(e) => e.key === 'Enter' && handleReconcile()}
+                      />
+                      <button
+                        onClick={handleReconcile}
+                        disabled={reconciling}
+                        className="px-3 py-1.5 rounded-md text-xs font-semibold transition-colors disabled:opacity-50"
+                        style={{ background: 'var(--accent)', color: 'var(--bg)' }}
+                      >
+                        {reconciling ? '…' : <Check size={13} />}
+                      </button>
+                      <button
+                        onClick={() => setReconcileOpen(false)}
+                        className="px-2 py-1.5 rounded-md text-ink-3 hover:text-ink transition-colors"
+                        style={{ border: '1px solid var(--line)' }}
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                    <div className="mt-1.5 text-[9px] text-ink-4 font-mono">
+                      Diff: {(() => {
+                        const t = parseFloat(reconcileTarget)
+                        if (isNaN(t)) return '—'
+                        const d = t - currentBalance
+                        return `${d >= 0 ? '+' : ''}${fmtX(Math.abs(d))} ${d >= 0 ? 'credit' : 'debit'} adjustment`
+                      })()}
+                    </div>
+                  </motion.div>
+                )}
               </div>
             )}
           </div>
@@ -424,8 +567,16 @@ export function AccountDetailSheet({
                     className="overflow-hidden rounded-lg"
                     style={{ background: 'rgba(255,51,85,0.06)', border: '1px solid rgba(255,51,85,0.18)' }}
                   >
-                    <div className="px-3 py-2 divide-y divide-[rgba(255,51,85,0.1)]">
-                      {anomalies.map((f, i) => <AnomalyRow key={i} flag={f} />)}
+                    <div className="px-3 py-1 divide-y divide-[rgba(255,51,85,0.1)]">
+                      {anomalies.map((f, i) => (
+                        <AnomalyRow
+                          key={i}
+                          flag={f}
+                          tx={txById.get(f.txId)}
+                          onEdit={onEditTx}
+                          onDelete={onDeleteTx}
+                        />
+                      ))}
                     </div>
                   </motion.div>
                 )}

@@ -68,6 +68,13 @@ export function TodayView({ userId }: TodayViewProps) {
   const todayIn  = useMemo(() => todayTx.filter((t) => t.direction === 'in'  && !t.counter_account_id).reduce((s, t) => s + t.amount, 0), [todayTx])
   const todayOut = useMemo(() => todayTx.filter((t) => t.direction === 'out' && !t.counter_account_id).reduce((s, t) => s + t.amount, 0), [todayTx])
 
+  // Net worth change over the last 30 data points — the one accumulation metric not shown elsewhere
+  const nwDelta30 = useMemo(() => {
+    if (metrics.nwHistory.length < 2) return 0
+    const from = metrics.nwHistory[Math.max(0, metrics.nwHistory.length - 30)]
+    return metrics.nw - from.nw
+  }, [metrics.nwHistory, metrics.nw])
+
   const handleLogSubmit = async (tx: Omit<Transaction, 'created_at'>) => {
     await insertTx.mutateAsync(tx)
   }
@@ -142,7 +149,7 @@ export function TodayView({ userId }: TodayViewProps) {
             </div>
 
             {/* Delta pills */}
-            <div className="flex items-center gap-2 mb-4">
+            <div className="flex items-center gap-2 mb-4 flex-wrap">
               <span
                 className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold"
                 style={{ background: 'rgba(0,230,118,0.12)', color: 'var(--invest)' }}
@@ -154,6 +161,19 @@ export function TodayView({ userId }: TodayViewProps) {
                 style={{ background: 'rgba(255,51,85,0.12)', color: 'var(--leak)' }}
               >
                 −{masked ? '••••' : fmtX(todayOut)}
+              </span>
+              <span className="text-ink-4 text-[10px] select-none">·</span>
+              <span
+                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold"
+                style={{
+                  background: nwDelta30 >= 0 ? 'rgba(0,230,118,0.08)' : 'rgba(255,51,85,0.08)',
+                  color: nwDelta30 >= 0 ? 'var(--invest)' : 'var(--leak)',
+                  border: `1px solid ${nwDelta30 >= 0 ? 'rgba(0,230,118,0.18)' : 'rgba(255,51,85,0.18)'}`,
+                }}
+                title="Net worth change over the last 30 days"
+              >
+                {masked ? '••••' : `${nwDelta30 >= 0 ? '+' : '−'}${fmtX(Math.abs(nwDelta30))}`}
+                <span className="opacity-50 text-[9px] font-normal">30d</span>
               </span>
             </div>
 

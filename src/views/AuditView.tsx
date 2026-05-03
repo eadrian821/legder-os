@@ -82,19 +82,21 @@ export function AuditView({ userId }: AuditViewProps) {
   )
   const summary = useMemo(() => periodSummary(currentTx), [currentTx])
 
-  // Category breakdown — tracks axis for color coding
+  // Category breakdown — key is stable id, label is human-readable name
   const categoryBreakdown = useMemo(() => {
-    const map = new Map<string, { amount: number; axis: string }>()
+    const catById = new Map(categories.map((c) => [c.id, c.name]))
+    const map = new Map<string, { amount: number; axis: string; label: string }>()
     for (const t of currentTx) {
       if (t.direction === 'out' && !t.counter_account_id && t.axis) {
-        const key = t.category_id ?? t.axis
+        const key   = t.category_id ?? t.axis
+        const label = t.category_id ? (catById.get(t.category_id) ?? t.axis) : t.axis
         const existing = map.get(key)
-        map.set(key, { amount: (existing?.amount ?? 0) + t.amount, axis: t.axis })
+        map.set(key, { amount: (existing?.amount ?? 0) + t.amount, axis: t.axis, label })
       }
     }
-    return Array.from(map.entries()).sort((a, b) => b[1].amount - a[1].amount).slice(0, 10)
-  }, [currentTx])
-  const maxCat = Math.max(...categoryBreakdown.map(([, { amount }]) => amount), 1)
+    return Array.from(map.values()).sort((a, b) => b.amount - a.amount).slice(0, 10)
+  }, [currentTx, categories])
+  const maxCat = Math.max(...categoryBreakdown.map(({ amount }) => amount), 1)
 
   // Grouped by date for full ledger
   const groupedByDate = useMemo(() => {
@@ -188,9 +190,9 @@ export function AuditView({ userId }: AuditViewProps) {
         <div className="px-4 mb-4">
           <div className="caps text-ink-3 mb-2">Breakdown</div>
           <div className="space-y-2">
-            {categoryBreakdown.map(([key, { amount, axis }]) => (
-              <div key={key} className="flex items-center gap-2">
-                <span className="text-[10px] text-ink-3 w-20 truncate">{key}</span>
+            {categoryBreakdown.map(({ label, amount, axis }) => (
+              <div key={label} className="flex items-center gap-2">
+                <span className="text-[10px] text-ink-3 w-24 truncate capitalize">{label.toLowerCase()}</span>
                 <div className="flex-1 h-1.5 bg-bg-3 rounded-sm overflow-hidden">
                   <div
                     className="h-full rounded-sm transition-all duration-300"

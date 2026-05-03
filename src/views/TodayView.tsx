@@ -247,9 +247,9 @@ export function TodayView({ userId }: TodayViewProps) {
           No {txFilter === 'all' ? '' : txFilter} transactions today
         </div>
       ) : (
-        filteredTx.map((t) => (
+        filteredTx.map((t, i) => (
           <TxRow
-            key={t.id} tx={t} accounts={accounts} masked={masked}
+            key={t.id} tx={t} accounts={accounts} masked={masked} index={i}
             onEdit={t.counter_account_id ? undefined : (tx) => { setEditTx(tx); setLogOpen(true) }}
           />
         ))

@@ -195,18 +195,24 @@ export function WeekView({ userId }: WeekViewProps) {
               <button
                 key={i}
                 onClick={() => setSelectedDay(selectedDay === i ? null : i)}
-                className="flex-1 flex flex-col items-center gap-1 py-1.5 rounded transition-all"
+                className="flex-1 flex flex-col items-center gap-0.5 py-1.5 rounded transition-all"
                 style={{
                   background: selectedDay === i ? 'rgba(0,230,118,0.1)' : 'transparent',
                   border: selectedDay === i ? '1px solid rgba(0,230,118,0.25)' : '1px solid transparent',
                 }}
               >
-                <span className="text-[9px] font-mono" style={{ color: d.isToday ? 'var(--accent)' : selectedDay === i ? 'var(--accent)' : 'var(--ink-4)' }}>
+                <span
+                  className="text-[9px] font-mono"
+                  style={{ color: d.isToday ? 'var(--accent)' : selectedDay === i ? 'var(--accent)' : 'var(--ink-4)' }}
+                >
                   {d.label}
                 </span>
-                {d.spend > 0 && (
-                  <div className="w-1 h-1 rounded-full" style={{ background: selectedDay === i ? 'var(--accent)' : 'var(--ink-4)' }} />
-                )}
+                <span
+                  className="text-[8px] font-mono tabular-nums"
+                  style={{ color: selectedDay === i ? 'var(--accent)' : d.spend > 0 ? 'var(--ink-3)' : 'var(--ink-4)', opacity: d.spend > 0 ? 1 : 0.3 }}
+                >
+                  {d.spend > 0 ? fmt(d.spend) : '—'}
+                </span>
               </button>
             ))}
           </div>
@@ -230,7 +236,7 @@ export function WeekView({ userId }: WeekViewProps) {
         {displayTx.length === 0 ? (
           <div className="px-4 py-10 text-center text-sm text-ink-4">No transactions</div>
         ) : (
-          displayTx.map((t) => <TxRow key={t.id} tx={t} accounts={accounts} masked={masked} />)
+          displayTx.map((t, i) => <TxRow key={t.id} tx={t} accounts={accounts} masked={masked} index={i} />)
         )}
       </div>
     </div>

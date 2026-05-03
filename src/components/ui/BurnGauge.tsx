@@ -32,6 +32,15 @@ const R = 76
 const C = 2 * Math.PI * R
 const GAUGE = C * (270 / 360)  // 358.14
 
+// Tick marks at 0%, 25%, 50%, 75%, 100% of the 270° arc
+const TICK_ANGLES = [0, 0.25, 0.5, 0.75, 1].map(t => (135 + t * 270) * (Math.PI / 180))
+const TICKS = TICK_ANGLES.map(a => ({
+  x1: (100 + 83 * Math.cos(a)).toFixed(1),
+  y1: (100 + 83 * Math.sin(a)).toFixed(1),
+  x2: (100 + 90 * Math.cos(a)).toFixed(1),
+  y2: (100 + 90 * Math.sin(a)).toFixed(1),
+}))
+
 export function BurnGauge({ dailyBurn, burnRatio, runway, runwayTotal, masked = false }: BurnGaugeProps) {
   const fillRef  = useRef<SVGCircleElement>(null)
   const fillMv   = useMotionValue(0)
@@ -85,6 +94,11 @@ export function BurnGauge({ dailyBurn, burnRatio, runway, runwayTotal, masked = 
             transform="rotate(135 100 100)"
             style={{ filter: `drop-shadow(0 0 6px ${color})` }}
           />
+          {/* Tick marks at 0/25/50/75/100% */}
+          {TICKS.map((t, i) => (
+            <line key={i} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2}
+              stroke="rgba(255,255,255,0.18)" strokeWidth={1.5} strokeLinecap="round" />
+          ))}
 
           {/* Center: burn value */}
           <text x={100} y={93} textAnchor="middle" dominantBaseline="middle"

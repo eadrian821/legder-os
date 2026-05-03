@@ -8,7 +8,7 @@ interface AxisBarProps {
 
 export function AxisBar({ totals, className = '' }: AxisBarProps) {
   const total = totals.INVEST + totals.PROTECT + totals.SUSTAIN + totals.LEAK
-  if (total === 0) return <div className={`h-1.5 rounded-sm bg-bg-3 ${className}`} />
+  if (total === 0) return <div className={`h-2 rounded-sm bg-bg-3 ${className}`} />
 
   const axes = [
     { key: 'INVEST',  value: totals.INVEST },
@@ -18,13 +18,14 @@ export function AxisBar({ totals, className = '' }: AxisBarProps) {
   ] as const
 
   return (
-    <div className={`flex h-1.5 overflow-hidden rounded-sm gap-px ${className}`}>
+    <div className={`flex h-2 overflow-hidden rounded-sm gap-px ${className}`}>
       {axes.map(({ key, value }) => {
         const pct = (value / total) * 100
         if (pct < 0.5) return null
         return (
           <div
             key={key}
+            title={`${key}: ${Math.round(pct)}%`}
             style={{ width: `${pct}%`, background: AXIS_COLORS[key] }}
             className="rounded-sm transition-all duration-500"
           />

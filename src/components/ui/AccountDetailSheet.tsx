@@ -615,7 +615,7 @@ export function AccountDetailSheet({
                   </div>
 
                   {/* Transactions — anomalous rows get a red left accent */}
-                  {txs.map((t) => (
+                  {txs.map((t, i) => (
                     <div
                       key={t.id}
                       style={anomalyTxIds.has(t.id) ? {
@@ -627,6 +627,7 @@ export function AccountDetailSheet({
                         tx={t}
                         accounts={allAccounts}
                         masked={masked}
+                        index={i}
                         onEdit={t.counter_account_id ? undefined : (tx) => onEditTx(tx)}
                       />
                     </div>

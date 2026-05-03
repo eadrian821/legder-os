@@ -242,9 +242,9 @@ export function AuditView({ userId }: AuditViewProps) {
                   {masked ? '••••' : (dayNet >= 0 ? `+${dayNet.toLocaleString()}` : `−${Math.abs(dayNet).toLocaleString()}`)}
                 </span>
               </div>
-              {txs.map((t) => (
+              {txs.map((t, i) => (
                 <TxRow
-                  key={t.id} tx={t} accounts={accounts} masked={masked}
+                  key={t.id} tx={t} accounts={accounts} masked={masked} index={i}
                   onEdit={t.counter_account_id ? undefined : (tx) => { setEditTx(tx); setLogOpen(true) }}
                 />
               ))}

@@ -1,3 +1,4 @@
+import { motion } from 'framer-motion'
 import { ArrowLeftRight, Pencil } from 'lucide-react'
 import type { Transaction, Account } from '@/types/ledger'
 import { AXIS_COLORS } from '@/constants/axes'
@@ -8,13 +9,14 @@ interface TxRowProps {
   accounts: Account[]
   masked?: boolean
   onEdit?: (tx: Transaction) => void
+  index?: number
 }
 
 const AXIS_LETTER: Record<string, string> = {
   INVEST: 'I', PROTECT: 'P', SUSTAIN: 'S', LEAK: 'L',
 }
 
-export function TxRow({ tx, accounts, masked = false, onEdit }: TxRowProps) {
+export function TxRow({ tx, accounts, masked = false, onEdit, index = 0 }: TxRowProps) {
   const isTransfer = !!tx.counter_account_id
   const isClickable = !!onEdit
   const account  = accounts.find((a) => a.id === tx.account_id)
@@ -30,7 +32,10 @@ export function TxRow({ tx, accounts, masked = false, onEdit }: TxRowProps) {
   })
 
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, y: 5 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: Math.min(index * 0.025, 0.15), duration: 0.18, ease: 'easeOut' }}
       className={`group flex items-center gap-3 px-4 py-3 border-b border-[var(--line)] last:border-0 transition-colors duration-100 ${
         isClickable ? 'cursor-pointer hover:bg-[var(--bg-2)] active:bg-[var(--bg-3)]' : ''
       }`}
@@ -47,6 +52,7 @@ export function TxRow({ tx, accounts, masked = false, onEdit }: TxRowProps) {
       ) : (
         <div
           className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 font-mono text-xs font-bold"
+          title={tx.axis ?? undefined}
           style={{
             background: `${axisColor}15`,
             color: axisColor,
@@ -94,6 +100,6 @@ export function TxRow({ tx, accounts, masked = false, onEdit }: TxRowProps) {
           )}
         </div>
       </div>
-    </div>
+    </motion.div>
   )
 }

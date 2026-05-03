@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useMotionValue, useSpring } from 'framer-motion'
+import { fmt } from '@/lib/utils'
 
 interface BurnGaugeProps {
   dailyBurn: number
@@ -87,8 +88,8 @@ export function BurnGauge({ dailyBurn, burnRatio, runway, runwayTotal, masked = 
 
           {/* Center: burn value */}
           <text x={100} y={93} textAnchor="middle" dominantBaseline="middle"
-            style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: 28, fontWeight: 700, fill: color }}>
-            {masked ? '••••' : `${Math.round(dailyBurn / 1000)}K`}
+            style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 28, fontWeight: 700, fill: color }}>
+            {masked ? '••••' : fmt(dailyBurn)}
           </text>
           <text x={100} y={116} textAnchor="middle"
             style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: 10, fill: 'var(--ink-3)', letterSpacing: 1 }}>

@@ -8,12 +8,15 @@ import type { ComputedMetrics } from '@/types/ledger'
 
 export function useComputedMetrics(userId: string | undefined): ComputedMetrics {
   const { data: accounts } = useAccounts(userId)
-  const { yearTx } = useTransactions(userId)
+  // Use allTx (full history) so opening_balance + ALL transactions = correct running balance.
+  // yearTx only covers Jan 1 → today — any account with pre-year activity shows wrong balance.
+  // React Query deduplicates the underlying queries, so no extra network calls.
+  const { allTx } = useTransactions(userId)
   const { data: snapshots } = useSnapshots(userId)
 
   return useMemo(
-    () => computeMetrics(accounts ?? [], yearTx ?? [], snapshots ?? {}),
-    [accounts, yearTx, snapshots]
+    () => computeMetrics(accounts ?? [], allTx, snapshots ?? {}),
+    [accounts, allTx, snapshots]
   )
 }
 

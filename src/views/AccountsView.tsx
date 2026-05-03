@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { RefreshCw } from 'lucide-react'
 import { useAccounts, useUpsertAccount, useDeleteAccount } from '@/hooks/useAccounts'
+import { useTransactions } from '@/hooks/useTransactions'
 import { useComputedMetrics } from '@/hooks/useMetrics'
 import { useUIStore } from '@/store'
 import { Sheet } from '@/components/ui/Sheet'
@@ -27,10 +28,13 @@ const KIND_COLORS: Record<AccountKind, string> = {
 }
 
 function AccountCard({
-  account, masked, index, onClick,
-}: { account: Account; masked: boolean; index: number; onClick: () => void }) {
-  const color  = KIND_COLORS[account.kind] ?? '#ffffff'
+  account, balance, masked, index, onClick,
+}: { account: Account; balance: number; masked: boolean; index: number; onClick: () => void }) {
+  const color    = KIND_COLORS[account.kind] ?? '#ffffff'
   const isCredit = account.kind === 'credit'
+  const balColor = isCredit
+    ? (balance < 0 ? 'var(--leak)' : 'var(--ink-2)')
+    : color
 
   return (
     <motion.button
@@ -46,7 +50,7 @@ function AccountCard({
         boxShadow: `0 4px 20px rgba(0,0,0,0.3)`,
       }}
     >
-      {/* Subtle glow orb */}
+      {/* Glow orb */}
       <div
         className="absolute -top-8 -right-8 w-24 h-24 rounded-full pointer-events-none"
         style={{ background: `${color}0f`, filter: 'blur(20px)' }}
@@ -63,14 +67,11 @@ function AccountCard({
         </span>
       </div>
 
-      {/* Balance */}
+      {/* Balance — computed from opening_balance + all transactions */}
       <div className="relative mb-3">
         <div className="caps text-ink-4 mb-1">Balance</div>
-        <div
-          className="font-mono text-2xl font-bold"
-          style={{ color: isCredit ? 'var(--leak)' : color }}
-        >
-          {masked ? '••••••' : `KES ${fmtX(account.opening_balance)}`}
+        <div className="font-mono text-2xl font-bold" style={{ color: balColor }}>
+          {masked ? '••••••' : `KES ${fmtX(balance)}`}
         </div>
       </div>
 
@@ -91,6 +92,8 @@ function AccountCard({
 export function AccountsView({ userId }: AccountsViewProps) {
   const { masked } = useUIStore()
   const { data: accounts = [], refetch } = useAccounts(userId)
+  // allTx = full history; React Query deduplicates with useComputedMetrics below
+  const { allTx } = useTransactions(userId)
   const metrics = useComputedMetrics(userId)
   const upsert = useUpsertAccount(userId)
   const del = useDeleteAccount(userId)
@@ -99,22 +102,34 @@ export function AccountsView({ userId }: AccountsViewProps) {
   const [open, setOpen] = useState(false)
   const [editAcc, setEditAcc] = useState<Account | undefined>()
 
+  // Compute each account's running balance: opening_balance + net of all transactions
+  const accountBalances = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const a of accounts) {
+      const net = allTx
+        .filter((t) => t.account_id === a.id)
+        .reduce((sum, t) => sum + (t.direction === 'in' ? t.amount : -t.amount), 0)
+      map[a.id] = a.opening_balance + net
+    }
+    return map
+  }, [accounts, allTx])
+
   const refreshSnaps = async () => {
     const { error } = await sb.functions.invoke('daily-snapshot', { body: { user_id: userId } })
     if (error) toast('Snapshot failed: ' + error.message)
     else { toast('Balances refreshed'); await refetch() }
   }
 
-  // Donut chart data
+  // Donut uses computed balances (positive balances only — skip debt accounts)
   const pieData = accounts
-    .filter((a) => a.opening_balance > 0)
     .map((a) => ({
-      name: a.name,
-      value: a.opening_balance,
+      name:  a.name,
+      value: Math.max(accountBalances[a.id] ?? 0, 0),
       color: KIND_COLORS[a.kind] ?? '#ffffff',
     }))
+    .filter((d) => d.value > 0)
 
-  const totalNw = accounts.reduce((s, a) => s + a.opening_balance, 0)
+  const pieTotal = pieData.reduce((s, d) => s + d.value, 0)
 
   return (
     <div className="pb-24 lg:pb-8">
@@ -132,11 +147,11 @@ export function AccountsView({ userId }: AccountsViewProps) {
             <div className="flex gap-4 mt-2 text-[10px] font-mono">
               <span>
                 <span className="text-ink-4">Liquid </span>
-                <span className="text-invest">{masked ? '••••' : `${fmtX(metrics.liqBal)}`}</span>
+                <span className="text-invest">{masked ? '••••' : fmtX(metrics.liqBal)}</span>
               </span>
               <span>
                 <span className="text-ink-4">Invest </span>
-                <span className="text-protect">{masked ? '••••' : `${fmtX(metrics.investBal)}`}</span>
+                <span className="text-protect">{masked ? '••••' : fmtX(metrics.investBal)}</span>
               </span>
             </div>
           </div>
@@ -150,7 +165,7 @@ export function AccountsView({ userId }: AccountsViewProps) {
         </div>
       </div>
 
-      {/* Donut chart (only when data exists) */}
+      {/* Portfolio donut — computed balances */}
       {pieData.length > 0 && (
         <div className="px-4 mb-4">
           <div
@@ -181,7 +196,8 @@ export function AccountsView({ userId }: AccountsViewProps) {
                     <Tooltip
                       contentStyle={{
                         background: 'var(--bg-2)', border: '1px solid var(--line)',
-                        borderRadius: 6, fontSize: 11, fontFamily: 'var(--font-mono)',
+                        borderRadius: 6, fontSize: 11,
+                        fontFamily: '"JetBrains Mono", monospace',
                         color: 'var(--ink)',
                       }}
                       formatter={(v: number) => [`KES ${fmtX(v)}`, '']}
@@ -197,7 +213,7 @@ export function AccountsView({ userId }: AccountsViewProps) {
                       <span className="text-ink-3 truncate">{d.name}</span>
                     </div>
                     <span className="font-mono text-ink-2">
-                      {masked ? '••••' : `${Math.round((d.value / totalNw) * 100)}%`}
+                      {masked ? '••••' : `${Math.round((d.value / pieTotal) * 100)}%`}
                     </span>
                   </div>
                 ))}
@@ -207,12 +223,13 @@ export function AccountsView({ userId }: AccountsViewProps) {
         </div>
       )}
 
-      {/* Account cards */}
+      {/* Account cards — computed balance passed per card */}
       <div className="px-4 mb-4 space-y-3">
         {accounts.map((a, i) => (
           <AccountCard
             key={a.id}
             account={a}
+            balance={accountBalances[a.id] ?? a.opening_balance}
             masked={masked}
             index={i}
             onClick={() => { setEditAcc(a); setOpen(true) }}

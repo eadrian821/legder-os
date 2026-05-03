@@ -131,6 +131,7 @@ export interface ComputedMetrics {
   nw: number
   nwHistory: NwPoint[]
   dailyBurn: number
+  dailyIncome: number   // trailing 30-day real income / 30
   liqBal: number
   investBal: number
   totalBal: number

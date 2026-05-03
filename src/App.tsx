@@ -9,6 +9,7 @@ import { useStore, useUIStore } from '@/store'
 import { ToastProvider } from '@/components/ui/Toast'
 import { TopBar } from '@/components/layout/TopBar'
 import { BottomNav } from '@/components/layout/BottomNav'
+import { Sidebar } from '@/components/layout/Sidebar'
 import { PageTransition } from '@/components/layout/PageTransition'
 import { AuthView } from '@/views/AuthView'
 import { TodayView } from '@/views/TodayView'
@@ -31,14 +32,11 @@ function AppInner() {
   const email = session?.user?.email
 
   useEffect(() => {
-    // Handle implicit flow tokens in URL hash
     handleHashTokens().catch(console.error)
 
-    // Subscribe to auth changes
     const { data: { subscription } } = sb.auth.onAuthStateChange((_, s) => setSession(s))
     sb.auth.getSession().then(({ data: { session: s } }) => setSession(s))
 
-    // Network status
     const onOnline  = () => setOnline(true)
     const onOffline = () => setOnline(false)
     window.addEventListener('online',  onOnline)
@@ -51,7 +49,6 @@ function AppInner() {
     }
   }, [])
 
-  // DevKitchen: accessible at ?dev (never requires auth)
   if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('dev')) {
     return (
       <Suspense fallback={null}>
@@ -63,19 +60,29 @@ function AppInner() {
   if (!userId) return <AuthView />
 
   return (
-    <div className="flex flex-col min-h-dvh bg-bg text-ink">
-      <TopBar userId={userId} />
-      <AnimatePresence mode="wait">
-        <PageTransition key={tab}>
-          {tab === 'today'    && <TodayView    userId={userId} />}
-          {tab === 'week'     && <WeekView     userId={userId} />}
-          {tab === 'audit'    && <AuditView    userId={userId} />}
-          {tab === 'plan'     && <PlanView     userId={userId} />}
-          {tab === 'accounts' && <AccountsView userId={userId} />}
-          {tab === 'settings' && <SettingsView userId={userId} email={email} />}
-        </PageTransition>
-      </AnimatePresence>
-      <BottomNav />
+    <div className="flex min-h-dvh bg-bg text-ink">
+      {/* Desktop: fixed sidebar */}
+      <Sidebar className="hidden lg:flex lg:flex-col" />
+
+      {/* Main column: shifts right on desktop */}
+      <div className="flex-1 flex flex-col lg:ml-[240px] min-w-0">
+        {/* Mobile-only top bar */}
+        <TopBar userId={userId} className="lg:hidden" />
+
+        <AnimatePresence mode="wait">
+          <PageTransition key={tab}>
+            {tab === 'today'    && <TodayView    userId={userId} />}
+            {tab === 'week'     && <WeekView     userId={userId} />}
+            {tab === 'audit'    && <AuditView    userId={userId} />}
+            {tab === 'plan'     && <PlanView     userId={userId} />}
+            {tab === 'accounts' && <AccountsView userId={userId} />}
+            {tab === 'settings' && <SettingsView userId={userId} email={email} />}
+          </PageTransition>
+        </AnimatePresence>
+
+        {/* Mobile-only bottom nav */}
+        <BottomNav className="lg:hidden" />
+      </div>
     </div>
   )
 }

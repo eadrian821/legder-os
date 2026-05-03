@@ -13,55 +13,47 @@ export interface KpiCardProps {
   hint?: string
 }
 
-const CARD_BG   = 'linear-gradient(135deg, rgba(13,13,24,0.9), rgba(18,18,32,0.95))'
-const SHADOW    = '0 4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04)'
-const BORDER    = '1px solid rgba(255,255,255,0.06)'
-const TOP_GLOW  = 'rgba(0,230,118,0.15)'
-const HOVER_BORDER = 'rgba(255,255,255,0.1)'
+const VAR_HEX: Record<string, string> = {
+  'var(--leak)':    '#ff3355',
+  'var(--invest)':  '#00e676',
+  'var(--protect)': '#4488ff',
+  'var(--sustain)': '#ffaa00',
+  'var(--accent)':  '#00e676',
+}
+
+function hexToRgba(hex: string, a: number) {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  return `rgba(${r},${g},${b},${a})`
+}
 
 export function KpiCard({
   label, value, format = 'compact', prefix, suffix,
   color, masked = false, index = 0, hint,
 }: KpiCardProps) {
+  const hex = color ? (VAR_HEX[color] ?? null) : null
+  const topBorder = hex ? hexToRgba(hex, 0.6) : 'rgba(255,255,255,0.08)'
+  const gradBg = hex
+    ? `linear-gradient(180deg, ${hexToRgba(hex, 0.07)} 0%, var(--bg-1) 100%)`
+    : 'var(--bg-1)'
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 6 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      // 50ms stagger between cards
-      transition={{ delay: index * 0.05, duration: 0.18, ease: 'easeOut' }}
-      whileHover={{ y: -1, transition: { duration: 0.12 } }}
+      transition={{ delay: index * 0.05, duration: 0.2, ease: 'easeOut' }}
+      whileHover={{ y: -2, transition: { duration: 0.12 } }}
       className="relative overflow-hidden rounded-lg p-3 cursor-default select-none"
       style={{
-        background:   CARD_BG,
-        border:       BORDER,
-        borderTopColor: TOP_GLOW,
-        boxShadow:    SHADOW,
-      }}
-      // Hover: brighten all borders
-      onMouseEnter={(e) => {
-        ;(e.currentTarget as HTMLElement).style.borderColor = HOVER_BORDER
-        ;(e.currentTarget as HTMLElement).style.borderTopColor = 'rgba(0,230,118,0.3)'
-      }}
-      onMouseLeave={(e) => {
-        ;(e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.06)'
-        ;(e.currentTarget as HTMLElement).style.borderTopColor = TOP_GLOW
+        background: gradBg,
+        border: '1px solid var(--line)',
+        borderTop: `2px solid ${topBorder}`,
+        boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
       }}
     >
-      {/* Label */}
-      <div
-        className="mb-1.5"
-        style={{
-          textTransform: 'uppercase',
-          letterSpacing: '0.08em',
-          fontSize: 10,
-          fontWeight: 500,
-          color: 'var(--ink-3)',
-        }}
-      >
-        {label}
-      </div>
+      <div className="caps text-ink-4 mb-1.5">{label}</div>
 
-      {/* Value */}
       <div className="flex items-baseline gap-0.5">
         <NumberTicker
           value={value}
@@ -74,11 +66,7 @@ export function KpiCard({
         />
       </div>
 
-      {hint && (
-        <div className="mt-1" style={{ fontSize: 10, color: 'var(--ink-4)' }}>
-          {hint}
-        </div>
-      )}
+      {hint && <div className="mt-1 text-[10px] text-ink-4">{hint}</div>}
     </motion.div>
   )
 }

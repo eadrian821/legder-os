@@ -1,17 +1,14 @@
 import { useEffect, useRef } from 'react'
 import { useMotionValue, useSpring } from 'framer-motion'
-import { NumberTicker } from './NumberTicker'
 
 interface BurnGaugeProps {
   dailyBurn: number
-  // burnRatio: 0–1 (dailyBurn / referenceIncome). >1 means spending more than you earn.
-  burnRatio: number
+  burnRatio: number  // 0–1 (>1 = spending more than earning)
   runway: number | null
   runwayTotal: number | null
   masked?: boolean
 }
 
-// Interpolate between two hex colors at ratio t (0–1)
 function lerpColor(a: string, b: string, t: number): string {
   const parse = (h: string) => [
     parseInt(h.slice(1, 3), 16),
@@ -20,119 +17,106 @@ function lerpColor(a: string, b: string, t: number): string {
   ]
   const [ar, ag, ab] = parse(a)
   const [br, bg, bb] = parse(b)
-  const r = Math.round(ar + (br - ar) * t)
-  const g = Math.round(ag + (bg - ag) * t)
-  const b2 = Math.round(ab + (bb - ab) * t)
-  return `rgb(${r},${g},${b2})`
+  return `rgb(${Math.round(ar + (br - ar) * t)},${Math.round(ag + (bg - ag) * t)},${Math.round(ab + (bb - ab) * t)})`
 }
 
-// invest(green) → sustain(amber) → leak(red)
 function burnColor(ratio: number): string {
-  const clamped = Math.min(Math.max(ratio, 0), 1)
-  if (clamped <= 0.5) {
-    return lerpColor('#00e676', '#ffaa00', clamped * 2)
-  }
-  return lerpColor('#ffaa00', '#ff3355', (clamped - 0.5) * 2)
+  const c = Math.min(Math.max(ratio, 0), 1)
+  return c <= 0.5 ? lerpColor('#00e676', '#ffaa00', c * 2) : lerpColor('#ffaa00', '#ff3355', (c - 0.5) * 2)
 }
+
+// Arc gauge constants: 270° arc, gap at bottom
+// r=76, C=2π×76≈477.52, gauge=C×270/360≈358.14, rotate 135° to start at 7:30 o'clock
+const R = 76
+const C = 2 * Math.PI * R
+const GAUGE = C * (270 / 360)  // 358.14
 
 export function BurnGauge({ dailyBurn, burnRatio, runway, runwayTotal, masked = false }: BurnGaugeProps) {
-  const barRef   = useRef<HTMLDivElement>(null)
-  const glowRef  = useRef<HTMLDivElement>(null)
+  const fillRef  = useRef<SVGCircleElement>(null)
   const fillMv   = useMotionValue(0)
-  const fillSpring = useSpring(fillMv, { stiffness: 80, damping: 22 })
+  const fillSpring = useSpring(fillMv, { stiffness: 70, damping: 20 })
+  const clamped  = Math.min(Math.max(burnRatio, 0), 1)
 
-  const clamped = Math.min(Math.max(burnRatio, 0), 1)
-  const color   = burnColor(burnRatio)
-
-  // Animate fill width via spring and write directly to DOM
-  useEffect(() => {
-    fillMv.set(clamped)
-  }, [clamped, fillMv])
+  useEffect(() => { fillMv.set(clamped) }, [clamped, fillMv])
 
   useEffect(() => {
     return fillSpring.on('change', (v) => {
-      if (!barRef.current) return
-      barRef.current.style.width  = `${v * 100}%`
-      barRef.current.style.background = burnColor(v)
-      barRef.current.style.boxShadow =
-        v > 0.8
-          ? `0 0 10px ${burnColor(v)}, 0 0 3px ${burnColor(v)}`
-          : 'none'
+      if (!fillRef.current) return
+      const filled = v * GAUGE
+      fillRef.current.setAttribute('stroke-dasharray', `${filled} ${C - filled}`)
+      fillRef.current.setAttribute('stroke', burnColor(v))
     })
   }, [fillSpring])
 
+  const color = burnColor(clamped)
+  const pctLabel = `${Math.round(clamped * 100)}%`
+  const runwayColor = runway != null && runway < 30 ? 'var(--leak)' : 'var(--ink-3)'
+
   return (
-    <div className="rounded-lg border border-[var(--line)] bg-[var(--bg-1)] px-4 py-3">
-      <div className="flex items-center justify-between mb-2.5">
-        <span
-          style={{
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-            fontSize: 10,
-            fontWeight: 500,
-            color: 'var(--ink-3)',
-          }}
-        >
-          Daily burn
-        </span>
-        <NumberTicker
-          value={dailyBurn}
-          format="compact"
-          prefix="KES"
-          masked={masked}
-          size="inline"
-          color={color}
-        />
-      </div>
+    <div
+      className="rounded-lg flex flex-col items-center py-5 px-4 relative overflow-hidden"
+      style={{ background: 'var(--bg-1)', border: '1px solid var(--line)' }}
+    >
+      <div className="caps text-ink-3 mb-4 w-full">Burn Rate</div>
 
-      {/* Gauge bar */}
-      <div
-        className="relative rounded-sm overflow-hidden"
-        style={{ height: 6, background: 'var(--bg-3)' }}
-      >
-        <div
-          ref={barRef}
-          className="absolute left-0 top-0 h-full rounded-sm"
-          style={{
-            width: `${clamped * 100}%`,
-            background: color,
-            transition: 'background 0.3s',
-          }}
-        />
-        {/* Pulsing glow overlay — only visible when burnRatio > 0.8 */}
-        {clamped > 0.8 && (
-          <div
-            ref={glowRef}
-            className="absolute left-0 top-0 h-full w-full rounded-sm"
-            style={{
-              background: color,
-              opacity: 0,
-              animation: 'pulseGlow 1.4s ease-in-out infinite',
-            }}
+      {/* SVG Arc gauge */}
+      <div className="relative">
+        <svg width={200} height={170} viewBox="0 0 200 200" fill="none">
+          {/* Background track */}
+          <circle
+            cx={100} cy={100} r={R}
+            fill="none"
+            stroke="rgba(255,255,255,0.05)"
+            strokeWidth={10}
+            strokeDasharray={`${GAUGE} ${C - GAUGE}`}
+            strokeLinecap="round"
+            transform="rotate(135 100 100)"
           />
-        )}
+          {/* Fill track — animated via ref */}
+          <circle
+            ref={fillRef}
+            cx={100} cy={100} r={R}
+            fill="none"
+            stroke={color}
+            strokeWidth={10}
+            strokeDasharray={`${clamped * GAUGE} ${C - clamped * GAUGE}`}
+            strokeLinecap="round"
+            transform="rotate(135 100 100)"
+            style={{ filter: `drop-shadow(0 0 6px ${color})` }}
+          />
+
+          {/* Center: burn value */}
+          <text x={100} y={93} textAnchor="middle" dominantBaseline="middle"
+            style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: 28, fontWeight: 700, fill: color }}>
+            {masked ? '••••' : `${Math.round(dailyBurn / 1000)}K`}
+          </text>
+          <text x={100} y={116} textAnchor="middle"
+            style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: 10, fill: 'var(--ink-3)', letterSpacing: 1 }}>
+            KES/day
+          </text>
+        </svg>
       </div>
 
-      {/* Runway readout */}
-      <div
-        className="flex items-center justify-between mt-2"
-        style={{ fontSize: 10, color: 'var(--ink-4)', fontFamily: 'var(--mono)' }}
-      >
-        <span>
-          cash&nbsp;
-          <span style={{ color: runway != null && runway < 30 ? 'var(--leak)' : 'var(--ink-3)' }}>
-            {masked ? '••' : runway != null ? `${Math.round(runway)}d` : '—'}
+      {/* Pct label */}
+      <div className="text-[11px] font-mono -mt-2 mb-3" style={{ color }}>
+        {pctLabel} of income
+      </div>
+
+      {/* Runway row */}
+      <div className="w-full flex items-center justify-between text-[10px] font-mono"
+        style={{ borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+        <div className="flex flex-col gap-0.5">
+          <span className="text-ink-4">CASH RUNWAY</span>
+          <span style={{ color: runwayColor }}>
+            {masked ? '••' : runway != null ? `${Math.round(runway)} days` : '—'}
           </span>
-        </span>
-        <span>
-          total&nbsp;
-          <span style={{ color: 'var(--ink-3)' }}>
-            {masked ? '••' : runwayTotal != null ? `${Math.round(runwayTotal)}d` : '—'}
+        </div>
+        <div className="flex flex-col gap-0.5 text-right">
+          <span className="text-ink-4">TOTAL RUNWAY</span>
+          <span className="text-ink-2">
+            {masked ? '••' : runwayTotal != null ? `${Math.round(runwayTotal)} days` : '—'}
           </span>
-        </span>
-        <span style={{ color: clamped > 1 ? 'var(--leak)' : clamped > 0.8 ? 'var(--sustain)' : 'var(--ink-4)' }}>
-          {(clamped * 100).toFixed(0)}% of income
-        </span>
+        </div>
       </div>
     </div>
   )

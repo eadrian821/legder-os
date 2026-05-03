@@ -1,16 +1,20 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useGoals, useUpsertGoal } from '@/hooks/useGoals'
 import { useRecurring, useUpsertRecurring } from '@/hooks/useRecurring'
 import { useBudgets, useUpsertBudget, useDeleteBudget } from '@/hooks/useBudgets'
 import { useCategories } from '@/hooks/useCategories'
 import { useComputedMetrics } from '@/hooks/useMetrics'
+import { useTransactions } from '@/hooks/useTransactions'
 import { useUIStore } from '@/store'
 import { Sheet } from '@/components/ui/Sheet'
+import { GoalCard } from '@/components/ui/GoalCard'
+import { BudgetCard } from '@/components/ui/BudgetCard'
+import { WeeklyBudgetSynthesis } from '@/components/ui/WeeklyBudgetSynthesis'
 import { GoalForm } from '@/components/forms/GoalForm'
 import { RecurringForm } from '@/components/forms/RecurringForm'
 import { BudgetForm } from '@/components/forms/BudgetForm'
 import { useAccounts } from '@/hooks/useAccounts'
-import { fmtX } from '@/lib/utils'
+import { fmtX, weekStart, addDays } from '@/lib/utils'
 import type { Goal, Recurring, Budget } from '@/types/ledger'
 
 interface PlanViewProps { userId: string }
@@ -23,114 +27,179 @@ export function PlanView({ userId }: PlanViewProps) {
   const { data: categories = [] } = useCategories(userId)
   const { data: accounts = [] } = useAccounts(userId)
   const metrics = useComputedMetrics(userId)
+  const { yearTx } = useTransactions(userId)
   const upsertGoal = useUpsertGoal(userId)
   const upsertRecurring = useUpsertRecurring(userId)
   const upsertBudget = useUpsertBudget(userId)
   const deleteBudget = useDeleteBudget(userId)
 
-  const [goalOpen, setGoalOpen] = useState(false)
+  const [goalOpen, setGoalOpen]           = useState(false)
   const [recurringOpen, setRecurringOpen] = useState(false)
-  const [budgetOpen, setBudgetOpen] = useState(false)
-  const [editGoal, setEditGoal] = useState<Goal | undefined>()
+  const [budgetOpen, setBudgetOpen]       = useState(false)
+  const [editGoal, setEditGoal]           = useState<Goal | undefined>()
   const [editRecurring, setEditRecurring] = useState<Recurring | undefined>()
-  const [editBudget, setEditBudget] = useState<Budget | undefined>()
+  const [editBudget, setEditBudget]       = useState<Budget | undefined>()
+
+  const ws = weekStart(0)
+
+  // Compute actual spend per budget in current period
+  const budgetsWithSpent = useMemo(() => {
+    const today     = new Date()
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
+    return budgets.map((b) => {
+      const periodStart = b.period === 'monthly' ? monthStart : ws
+      const spent = yearTx
+        .filter((t) => {
+          const d = new Date(t.occurred_at)
+          return d >= periodStart && d <= today &&
+                 t.direction === 'out' && !t.counter_account_id &&
+                 (b.axis
+                   ? t.axis === b.axis
+                   : b.category_id ? t.category_id === b.category_id : false)
+        })
+        .reduce((sum, t) => sum + t.amount, 0)
+      return { ...b, actualSpent: spent }
+    })
+  }, [budgets, yearTx, ws])
+
+  // Current week's SUSTAIN+LEAK spend for synthesis panel
+  const weekActualSpend = useMemo(() => {
+    const we = addDays(ws, 7)
+    return yearTx
+      .filter((t) => {
+        const d = new Date(t.occurred_at)
+        return d >= ws && d < we &&
+               t.direction === 'out' && !t.counter_account_id &&
+               (t.axis === 'SUSTAIN' || t.axis === 'LEAK')
+      })
+      .reduce((sum, t) => sum + t.amount, 0)
+  }, [yearTx, ws])
 
   return (
-    <div className="pb-20">
-      {/* Runway summary */}
+    <div className="pb-24 lg:pb-8">
+      {/* Runway hero */}
       <div className="px-4 pt-4 mb-4">
-        <div className="rounded-lg bg-bg-1 border border-line p-4 grid grid-cols-2 gap-4">
+        <div
+          className="rounded-lg p-4 grid grid-cols-2 gap-4"
+          style={{ background: 'var(--bg-1)', border: '1px solid var(--line)' }}
+        >
           <div>
-            <div className="caps text-ink-3 mb-1">Cash runway</div>
-            <div className="font-mono text-2xl font-bold text-ink">
+            <div className="caps text-ink-4 mb-1">Cash runway</div>
+            <div className="font-mono text-2xl font-bold" style={{ color: metrics.runway != null && metrics.runway < 30 ? 'var(--leak)' : 'var(--protect)' }}>
               {metrics.runway != null ? `${Math.round(metrics.runway)}d` : '—'}
             </div>
           </div>
           <div>
-            <div className="caps text-ink-3 mb-1">Asset runway</div>
-            <div className="font-mono text-2xl font-bold text-ink">
+            <div className="caps text-ink-4 mb-1">Total runway</div>
+            <div className="font-mono text-2xl font-bold text-ink-2">
               {metrics.runwayTotal != null ? `${Math.round(metrics.runwayTotal)}d` : '—'}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Goals */}
-      <div className="px-4 mb-2 flex items-center justify-between">
+      {/* ── Weekly synthesis ── */}
+      <div className="px-4">
+        <WeeklyBudgetSynthesis
+          budgets={budgetsWithSpent}
+          weekActualSpend={weekActualSpend}
+          masked={masked}
+        />
+      </div>
+
+      {/* ── Goals ── */}
+      <div className="px-4 mb-3 flex items-center justify-between">
         <span className="caps text-ink-3">Goals</span>
-        <button className="text-xs px-2 py-1 rounded border border-line text-ink-3 hover:text-ink"
-          onClick={() => { setEditGoal(undefined); setGoalOpen(true) }}>+ Add</button>
-      </div>
-      <div className="space-y-0 border-t border-line mb-4">
-        {goals.length === 0 && <div className="px-4 py-4 text-sm text-ink-4">No goals yet</div>}
-        {goals.map((g) => {
-          const pct = Math.min((g.current_amount / g.target_amount) * 100, 100)
-          return (
-            <button key={g.id} className="w-full px-4 py-3 border-b border-line hover:bg-bg-2 text-left"
-              onClick={() => { setEditGoal(g); setGoalOpen(true) }}>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-sm text-ink">{g.name}</span>
-                <span className="font-mono text-xs text-ink-2">
-                  {masked ? '••••' : `${fmtX(g.current_amount)} / ${fmtX(g.target_amount)}`}
-                </span>
-              </div>
-              <div className="h-1 bg-bg-3 rounded-sm overflow-hidden">
-                <div className="h-full bg-invest rounded-sm transition-all" style={{ width: `${pct}%` }} />
-              </div>
-              {g.deadline && (
-                <div className="text-[10px] text-ink-4 mt-1">
-                  {new Date(g.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                </div>
-              )}
-            </button>
-          )
-        })}
+        <button
+          className="text-xs px-2.5 py-1 rounded border border-line text-ink-3 hover:text-ink transition-colors"
+          onClick={() => { setEditGoal(undefined); setGoalOpen(true) }}
+        >
+          + Add
+        </button>
       </div>
 
-      {/* Budgets */}
-      <div className="px-4 mb-2 flex items-center justify-between">
+      {goals.length === 0 ? (
+        <div className="px-4 py-4 text-sm text-ink-4 mb-4">No goals yet</div>
+      ) : (
+        <div className="px-4 space-y-3 mb-6">
+          {goals.map((g, i) => (
+            <GoalCard
+              key={g.id}
+              goal={g}
+              masked={masked}
+              index={i}
+              onClick={() => { setEditGoal(g); setGoalOpen(true) }}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* ── Budgets ── */}
+      <div className="px-4 mb-3 flex items-center justify-between">
         <span className="caps text-ink-3">Budgets</span>
-        <button className="text-xs px-2 py-1 rounded border border-line text-ink-3 hover:text-ink"
-          onClick={() => { setEditBudget(undefined); setBudgetOpen(true) }}>+ Add</button>
-      </div>
-      <div className="border-t border-line mb-4">
-        {budgets.length === 0 && <div className="px-4 py-4 text-sm text-ink-4">No budgets yet</div>}
-        {budgets.map((b) => (
-          <div key={b.id} className="px-4 py-3 border-b border-line flex items-center justify-between">
-            <div>
-              <div className="text-sm text-ink">{b.axis ?? (categories.find(c => c.id === b.category_id)?.name ?? '—')}</div>
-              <div className="text-[10px] text-ink-3 caps">{b.period}</div>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="font-mono text-sm text-ink">{masked ? '••••' : `KES ${fmtX(b.limit_amount)}`}</span>
-              <button className="text-xs text-leak" onClick={async () => await deleteBudget.mutateAsync(b.id)}>✕</button>
-            </div>
-          </div>
-        ))}
+        <button
+          className="text-xs px-2.5 py-1 rounded border border-line text-ink-3 hover:text-ink transition-colors"
+          onClick={() => { setEditBudget(undefined); setBudgetOpen(true) }}
+        >
+          + Add
+        </button>
       </div>
 
-      {/* Recurring */}
-      <div className="px-4 mb-2 flex items-center justify-between">
+      {budgetsWithSpent.length === 0 ? (
+        <div className="px-4 py-4 text-sm text-ink-4 mb-4">No budgets yet</div>
+      ) : (
+        <div className="px-4 space-y-3 mb-6">
+          {budgetsWithSpent.map((b, i) => (
+            <BudgetCard
+              key={b.id}
+              budget={b}
+              actualSpent={b.actualSpent}
+              categories={categories}
+              masked={masked}
+              index={i}
+              onDelete={async () => { await deleteBudget.mutateAsync(b.id) }}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* ── Recurring ── */}
+      <div className="px-4 mb-3 flex items-center justify-between">
         <span className="caps text-ink-3">Recurring</span>
-        <button className="text-xs px-2 py-1 rounded border border-line text-ink-3 hover:text-ink"
-          onClick={() => { setEditRecurring(undefined); setRecurringOpen(true) }}>+ Add</button>
+        <button
+          className="text-xs px-2.5 py-1 rounded border border-line text-ink-3 hover:text-ink transition-colors"
+          onClick={() => { setEditRecurring(undefined); setRecurringOpen(true) }}
+        >
+          + Add
+        </button>
       </div>
-      <div className="border-t border-line mb-4">
-        {recurring.length === 0 && <div className="px-4 py-4 text-sm text-ink-4">No recurring entries</div>}
+
+      <div style={{ borderTop: '1px solid var(--line)' }} className="mb-4">
+        {recurring.length === 0 && (
+          <div className="px-4 py-4 text-sm text-ink-4">No recurring entries</div>
+        )}
         {recurring.map((r) => (
-          <button key={r.id} className="w-full px-4 py-3 border-b border-line hover:bg-bg-2 text-left flex items-center justify-between"
-            onClick={() => { setEditRecurring(r); setRecurringOpen(true) }}>
+          <button
+            key={r.id}
+            className="w-full px-4 py-3 text-left flex items-center justify-between transition-colors hover:bg-bg-2"
+            style={{ borderBottom: '1px solid var(--line)' }}
+            onClick={() => { setEditRecurring(r); setRecurringOpen(true) }}
+          >
             <div>
               <div className="text-sm text-ink">{r.description}</div>
-              <div className="text-[10px] text-ink-3 caps">{r.frequency} · next {r.next_date}</div>
+              <div className="text-[10px] text-ink-4 caps mt-0.5">{r.frequency} · next {r.next_date}</div>
             </div>
-            <span className={`font-mono text-sm ${r.direction === 'in' ? 'text-invest' : 'text-leak'}`}>
-              {masked ? '••••' : `${r.direction === 'in' ? '+' : '-'}${fmtX(r.amount)}`}
+            <span
+              className="font-mono text-sm font-semibold"
+              style={{ color: r.direction === 'in' ? 'var(--invest)' : 'var(--leak)' }}
+            >
+              {masked ? '••••' : `${r.direction === 'in' ? '+' : '−'}${fmtX(r.amount)}`}
             </span>
           </button>
         ))}
       </div>
 
+      {/* Sheets */}
       <Sheet open={goalOpen} onClose={() => setGoalOpen(false)} title={editGoal ? 'Edit goal' : 'New goal'}>
         <GoalForm userId={userId} editGoal={editGoal}
           onSubmit={async (g) => { await upsertGoal.mutateAsync(g) }}

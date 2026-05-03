@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { motion } from 'framer-motion'
 import { useMetrics } from '@/hooks/useMetrics'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useTransactions, useInsertTransaction, useDeleteTransaction } from '@/hooks/useTransactions'
@@ -16,9 +17,19 @@ import { SparkLine } from '@/components/ui/SparkLine'
 import { PinModal } from '@/components/ui/PinModal'
 import { BurnGauge } from '@/components/ui/BurnGauge'
 import { todayLocal, addDays, fmtX } from '@/lib/utils'
+import { Lock, Unlock } from 'lucide-react'
 import type { Transaction } from '@/types/ledger'
 
 interface TodayViewProps { userId: string }
+
+type TxFilter = 'all' | 'expense' | 'income' | 'transfer'
+
+const FILTERS: { id: TxFilter; label: string }[] = [
+  { id: 'all',      label: 'All' },
+  { id: 'expense',  label: 'Expense' },
+  { id: 'income',   label: 'Income' },
+  { id: 'transfer', label: 'Transfer' },
+]
 
 export function TodayView({ userId }: TodayViewProps) {
   const { masked, nwLocked, toggleNwLocked } = useUIStore()
@@ -29,37 +40,33 @@ export function TodayView({ userId }: TodayViewProps) {
   const insertTx = useInsertTransaction(userId)
   const deleteTx = useDeleteTransaction(userId)
 
-  const [logOpen, setLogOpen] = useState(false)
+  const [logOpen, setLogOpen]       = useState(false)
   const [transferOpen, setTransferOpen] = useState(false)
-  const [editTx, setEditTx] = useState<Transaction | undefined>()
-  const [pinOpen, setPinOpen] = useState(false)
+  const [editTx, setEditTx]         = useState<Transaction | undefined>()
+  const [pinOpen, setPinOpen]       = useState(false)
+  const [txFilter, setTxFilter]     = useState<TxFilter>('all')
 
-  const today = todayLocal()
+  const today    = todayLocal()
   const tomorrow = addDays(today, 1)
 
   const todayTx = useMemo(
-    () => yearTx.filter((t) => { const d = new Date(t.occurred_at); return d >= today && d < tomorrow })
+    () => yearTx
+      .filter((t) => { const d = new Date(t.occurred_at); return d >= today && d < tomorrow })
       .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)),
     [yearTx]
   )
 
-  // Group by time of day
-  const grouped = useMemo(() => {
-    const evening   = todayTx.filter((t) => new Date(t.occurred_at).getHours() >= 17)
-    const afternoon = todayTx.filter((t) => { const h = new Date(t.occurred_at).getHours(); return h >= 12 && h < 17 })
-    const morning   = todayTx.filter((t) => new Date(t.occurred_at).getHours() < 12)
-    return [
-      { label: 'Evening', txs: evening },
-      { label: 'Afternoon', txs: afternoon },
-      { label: 'Morning', txs: morning },
-    ].filter((g) => g.txs.length > 0)
-  }, [todayTx])
+  const filteredTx = useMemo(() => {
+    if (txFilter === 'expense')  return todayTx.filter((t) => t.direction === 'out' && !t.counter_account_id)
+    if (txFilter === 'income')   return todayTx.filter((t) => t.direction === 'in'  && !t.counter_account_id)
+    if (txFilter === 'transfer') return todayTx.filter((t) => !!t.counter_account_id)
+    return todayTx
+  }, [todayTx, txFilter])
 
-  const sparkPoints = useMemo(() => metrics.nwHistory.slice(-30).map((p) => p.nw), [metrics.nwHistory])
+  const sparkPoints = useMemo(() => metrics.nwHistory.slice(-60).map((p) => p.nw), [metrics.nwHistory])
 
-  const todayDelta = useMemo(() => {
-    return todayTx.reduce((s, t) => s + (t.direction === 'in' ? t.amount : -t.amount), 0)
-  }, [todayTx])
+  const todayIn  = useMemo(() => todayTx.filter((t) => t.direction === 'in'  && !t.counter_account_id).reduce((s, t) => s + t.amount, 0), [todayTx])
+  const todayOut = useMemo(() => todayTx.filter((t) => t.direction === 'out' && !t.counter_account_id).reduce((s, t) => s + t.amount, 0), [todayTx])
 
   const handleLogSubmit = async (tx: Omit<Transaction, 'created_at'>) => {
     await insertTx.mutateAsync(tx)
@@ -77,7 +84,7 @@ export function TodayView({ userId }: TodayViewProps) {
   if (isLoading || txLoading) {
     return (
       <div className="p-4 space-y-3">
-        <SkeletonCard lines={3} showNumber height={120} />
+        <SkeletonCard lines={3} showNumber height={180} />
         <div className="grid grid-cols-4 gap-2">
           {Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} lines={2} />)}
         </div>
@@ -86,76 +93,120 @@ export function TodayView({ userId }: TodayViewProps) {
   }
 
   return (
-    <div className="pb-20">
-      {/* Hero card */}
+    <div className="pb-24 lg:pb-8">
+      {/* ── Hero card ── */}
       <div className="px-4 pt-4 pb-3">
-        <div className="rounded-lg p-4 border border-line bg-bg-1" style={{ boxShadow: '0 4px 32px rgba(0,0,0,0.5)' }}>
-          <div className="flex items-start justify-between mb-3">
-            <div>
-              <div className="caps text-ink-3 mb-1">NET WORTH</div>
-              <div className="flex items-center gap-2">
-                {nwLocked ? (
-                  <button
-                    className="font-mono text-[46px] font-extrabold leading-none text-ink-4 blur-sm"
-                    onClick={() => setPinOpen(true)}
-                  >
-                    ••••••
-                  </button>
-                ) : (
-                  <NumberTicker value={metrics.nw} format="compact" prefix="KES" masked={masked} size="hero" />
-                )}
-                <button
-                  className="text-ink-4 text-sm mt-1"
-                  onClick={() => nwLocked ? setPinOpen(true) : toggleNwLocked()}
-                >
-                  {nwLocked ? '🔒' : '🔓'}
-                </button>
-              </div>
-              <div className={`text-xs font-mono mt-1 ${todayDelta >= 0 ? 'text-invest' : 'text-leak'}`}>
-                {masked ? '••••' : `${todayDelta >= 0 ? '+' : ''}${fmtX(todayDelta)} today`}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.28, ease: 'easeOut' }}
+          className="rounded-lg overflow-hidden"
+          style={{
+            background: 'linear-gradient(135deg, #0d1f14 0%, #07070f 60%, #0a0a1f 100%)',
+            border: '1px solid rgba(0,230,118,0.15)',
+            boxShadow: '0 8px 40px rgba(0,0,0,0.6), 0 0 0 0 rgba(0,230,118,0)',
+          }}
+        >
+          <div className="px-5 pt-5 pb-4">
+            {/* Top row */}
+            <div className="flex items-center justify-between mb-4">
+              <span className="caps text-ink-3">Net Worth</span>
+              <div className="flex items-center gap-1.5 font-mono text-[10px]" style={{ color: 'var(--invest)' }}>
+                <span
+                  className="w-1.5 h-1.5 rounded-full bg-invest animate-pulseGlow"
+                  style={{ boxShadow: '0 0 6px var(--invest)' }}
+                />
+                LIVE
               </div>
             </div>
-            <SparkLine points={sparkPoints} width={100} height={36} />
+
+            {/* NW value + lock */}
+            <div className="flex items-end gap-3 mb-1">
+              {nwLocked ? (
+                <button
+                  className="font-mono text-[46px] font-extrabold leading-none text-ink-4"
+                  style={{ filter: 'blur(12px)' }}
+                  onClick={() => setPinOpen(true)}
+                >
+                  KES ••••••
+                </button>
+              ) : (
+                <NumberTicker value={metrics.nw} format="compact" prefix="KES" masked={masked} size="hero" />
+              )}
+              <button
+                className="mb-2 text-ink-4 hover:text-ink-2 transition-colors"
+                onClick={() => nwLocked ? setPinOpen(true) : toggleNwLocked()}
+              >
+                {nwLocked ? <Lock size={15} strokeWidth={2} /> : <Unlock size={15} strokeWidth={2} />}
+              </button>
+            </div>
+
+            {/* Delta pills */}
+            <div className="flex items-center gap-2 mb-4">
+              <span
+                className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold"
+                style={{ background: 'rgba(0,230,118,0.12)', color: 'var(--invest)' }}
+              >
+                +{masked ? '••••' : fmtX(todayIn)}
+              </span>
+              <span
+                className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold"
+                style={{ background: 'rgba(255,51,85,0.12)', color: 'var(--leak)' }}
+              >
+                −{masked ? '••••' : fmtX(todayOut)}
+              </span>
+            </div>
+
+            {/* Full-width sparkline */}
+            <div className="w-full mb-3" style={{ height: 56 }}>
+              <SparkLine points={sparkPoints} width="100%" height={56} color="var(--invest)" />
+            </div>
+
+            {/* Axis bar */}
+            <AxisBar totals={metrics.axisToday} />
           </div>
-          <AxisBar totals={metrics.axisToday} />
-        </div>
+        </motion.div>
       </div>
 
-      {/* Burn gauge */}
+      {/* ── Burn gauge (arc ring) ── */}
       <div className="px-4 mb-3">
         <BurnGauge
           dailyBurn={metrics.dailyBurn}
-          burnRatio={metrics.dailyBurn / (metrics.incomeM / 30 || 1)}
+          burnRatio={metrics.dailyIncome > 0
+            ? metrics.dailyBurn / metrics.dailyIncome
+            : metrics.dailyBurn > 0 ? 1 : 0}
           runway={metrics.runway}
           runwayTotal={metrics.runwayTotal}
           masked={masked}
         />
       </div>
 
-      {/* KPI grid */}
+      {/* ── KPI grid ── */}
       <div className="px-4 mb-4 grid grid-cols-4 gap-2">
-        <KpiCard index={0} label="Burn/day"  value={metrics.dailyBurn}  masked={masked} color="var(--sustain)" />
-        <KpiCard index={1} label="Leak%"     value={metrics.leakPct}    masked={masked} suffix="%" color="var(--leak)" />
-        <KpiCard index={2} label="Month in"  value={metrics.incomeM}    masked={masked} color="var(--invest)" />
-        <KpiCard index={3} label="Week out"  value={metrics.axisWeek.SUSTAIN + metrics.axisWeek.LEAK} masked={masked} />
-        <KpiCard index={4} label="Cash runway" value={metrics.runway ?? 0} suffix="d" />
-        <KpiCard index={5} label="Asset runway" value={metrics.runwayTotal ?? 0} suffix="d" />
-        <KpiCard index={6} label="Save rate" value={metrics.saveRate}   masked={masked} suffix="%" color="var(--invest)" />
-        <KpiCard index={7} label="Deployed"  value={metrics.deployedM}  masked={masked} color="var(--protect)" />
+        <KpiCard index={0} label="Burn/day"     value={metrics.dailyBurn}  masked={masked} color="var(--leak)" />
+        <KpiCard index={1} label="Leak%"        value={metrics.leakPct}    masked={masked} suffix="%" color="var(--leak)" />
+        <KpiCard index={2} label="Month in"     value={metrics.incomeM}    masked={masked} color="var(--invest)" />
+        <KpiCard index={3} label="Week out"     value={metrics.axisWeek.SUSTAIN + metrics.axisWeek.LEAK} masked={masked} color="var(--sustain)" />
+        <KpiCard index={4} label="Cash run"     value={metrics.runway ?? 0}      suffix="d" color="var(--protect)" />
+        <KpiCard index={5} label="Total run"    value={metrics.runwayTotal ?? 0}  suffix="d" color="var(--protect)" />
+        <KpiCard index={6} label="Save rate"    value={metrics.saveRate}   masked={masked} suffix="%" color="var(--invest)" />
+        <KpiCard index={7} label="Deployed"     value={metrics.deployedM}  masked={masked} color="var(--invest)" />
       </div>
 
-      {/* Transaction list */}
+      {/* ── Transaction section ── */}
       <div className="px-4 mb-3 flex items-center justify-between">
-        <span className="caps text-ink-3">Today</span>
+        <span className="caps text-ink-3">Transactions</span>
         <div className="flex gap-2">
           <button
-            className="text-xs px-3 py-1 rounded-md border border-protect/40 text-protect hover:bg-protect/10"
+            className="text-xs px-3 py-1.5 rounded-md border text-protect hover:bg-protect/10 transition-colors"
+            style={{ borderColor: 'rgba(68,136,255,0.3)' }}
             onClick={() => setTransferOpen(true)}
           >
             Transfer
           </button>
           <button
-            className="text-xs px-3 py-1 rounded-md bg-accent/10 border border-accent/30 text-accent hover:bg-accent/20"
+            className="text-xs px-3 py-1.5 rounded-md border text-accent hover:bg-accent/20 transition-colors"
+            style={{ background: 'rgba(0,230,118,0.08)', borderColor: 'rgba(0,230,118,0.3)' }}
             onClick={() => { setEditTx(undefined); setLogOpen(true) }}
           >
             + Log
@@ -163,21 +214,44 @@ export function TodayView({ userId }: TodayViewProps) {
         </div>
       </div>
 
-      {grouped.length === 0 ? (
-        <div className="px-4 py-8 text-center text-sm text-ink-4">No transactions today</div>
-      ) : (
-        grouped.map((g) => (
-          <div key={g.label} className="mb-3">
-            <div className="px-4 py-1 caps text-ink-4">{g.label}</div>
-            <div className="border-t border-line">
-              {g.txs.map((t) => (
-                <TxRow
-                  key={t.id} tx={t} accounts={accounts} masked={masked}
-                  onEdit={(tx) => { setEditTx(tx); setLogOpen(true) }}
+      {/* Filter tabs */}
+      <div
+        className="px-4 flex gap-0 mb-0 relative"
+        style={{ borderBottom: '1px solid var(--line)' }}
+      >
+        {FILTERS.map(({ id, label }) => {
+          const active = txFilter === id
+          return (
+            <button
+              key={id}
+              onClick={() => setTxFilter(id)}
+              className="relative px-3 py-2 text-xs font-medium transition-colors"
+              style={{ color: active ? 'var(--accent)' : 'var(--ink-3)' }}
+            >
+              {label}
+              {active && (
+                <motion.div
+                  layoutId="tx-filter-bar"
+                  className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full"
+                  style={{ background: 'var(--accent)' }}
                 />
-              ))}
-            </div>
-          </div>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Tx list */}
+      {filteredTx.length === 0 ? (
+        <div className="px-4 py-10 text-center text-sm text-ink-4">
+          No {txFilter === 'all' ? '' : txFilter} transactions today
+        </div>
+      ) : (
+        filteredTx.map((t) => (
+          <TxRow
+            key={t.id} tx={t} accounts={accounts} masked={masked}
+            onEdit={(tx) => { setEditTx(tx); setLogOpen(true) }}
+          />
         ))
       )}
 

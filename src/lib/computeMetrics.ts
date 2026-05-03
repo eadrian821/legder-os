@@ -45,9 +45,17 @@ export function computeMetrics(
     })
     .reduce((s, t) => s + t.amount, 0)
 
-  const dailyBurn    = trail30Burn / 30
-  const runway       = dailyBurn > 0 ? liqBal / dailyBurn : null
-  const runwayTotal  = dailyBurn > 0 ? totalBal / dailyBurn : null
+  const trail30Income = transactions
+    .filter((t) => {
+      const d = new Date(t.occurred_at)
+      return d >= t30ago && d < today && t.direction === 'in' && isReal(t)
+    })
+    .reduce((s, t) => s + t.amount, 0)
+
+  const dailyBurn   = trail30Burn / 30
+  const dailyIncome = trail30Income / 30
+  const runway      = dailyBurn > 0 ? liqBal / dailyBurn : null
+  const runwayTotal = dailyBurn > 0 ? totalBal / dailyBurn : null
 
   // ─── Current month stats ─────────────────────────────────────────────────────
   const moStart  = new Date(today.getFullYear(), today.getMonth(), 1)
@@ -146,7 +154,7 @@ export function computeMetrics(
   if (!snapshots[todayKey]) nwHistory.push({ date: todayKey, nw })
 
   return {
-    nw, nwHistory, dailyBurn, liqBal, investBal, totalBal,
+    nw, nwHistory, dailyBurn, dailyIncome, liqBal, investBal, totalBal,
     runway, runwayTotal, saveRate, investRate, deployedM,
     incomeM, spentM, leakPct, axisToday, axisWeek, axisMonth,
     weekDays, monthDays,
@@ -154,7 +162,7 @@ export function computeMetrics(
 }
 
 export const ZERO_METRICS: ComputedMetrics = {
-  nw: 0, nwHistory: [], dailyBurn: 0, liqBal: 0, investBal: 0, totalBal: 0,
+  nw: 0, nwHistory: [], dailyBurn: 0, dailyIncome: 0, liqBal: 0, investBal: 0, totalBal: 0,
   runway: null, runwayTotal: null, saveRate: 0, investRate: 0,
   deployedM: 0, incomeM: 0, spentM: 0, leakPct: 0,
   axisToday: { ...ZERO_AXES }, axisWeek: { ...ZERO_AXES }, axisMonth: { ...ZERO_AXES },

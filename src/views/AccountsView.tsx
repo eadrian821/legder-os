@@ -2,15 +2,15 @@ import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { RefreshCw } from 'lucide-react'
-import { useAccounts, useUpsertAccount, useDeleteAccount } from '@/hooks/useAccounts'
-import { useTransactions } from '@/hooks/useTransactions'
+import { useQueryClient } from '@tanstack/react-query'
+import { useAccounts, useUpsertAccount, useDeleteAccount, accountKeys } from '@/hooks/useAccounts'
+import { useTransactions, txKeys } from '@/hooks/useTransactions'
 import { useComputedMetrics } from '@/hooks/useMetrics'
 import { useUIStore } from '@/store'
 import { Sheet } from '@/components/ui/Sheet'
 import { AccountForm } from '@/components/forms/AccountForm'
 import { ACCOUNT_KIND_LABELS } from '@/constants/accounts'
 import { fmtX } from '@/lib/utils'
-import { sb } from '@/lib/supabase'
 import { useToast } from '@/components/ui/Toast'
 import type { Account } from '@/types/ledger'
 import type { AccountKind } from '@/constants/accounts'
@@ -91,7 +91,7 @@ function AccountCard({
 
 export function AccountsView({ userId }: AccountsViewProps) {
   const { masked } = useUIStore()
-  const { data: accounts = [], refetch } = useAccounts(userId)
+  const { data: accounts = [] } = useAccounts(userId)
   // allTx = full history; React Query deduplicates with useComputedMetrics below
   const { allTx } = useTransactions(userId)
   const metrics = useComputedMetrics(userId)
@@ -99,6 +99,7 @@ export function AccountsView({ userId }: AccountsViewProps) {
   const del = useDeleteAccount(userId)
   const { toast } = useToast()
 
+  const qc = useQueryClient()
   const [open, setOpen] = useState(false)
   const [editAcc, setEditAcc] = useState<Account | undefined>()
 
@@ -115,9 +116,12 @@ export function AccountsView({ userId }: AccountsViewProps) {
   }, [accounts, allTx])
 
   const refreshSnaps = async () => {
-    const { error } = await sb.functions.invoke('daily-snapshot', { body: { user_id: userId } })
-    if (error) toast('Snapshot failed: ' + error.message)
-    else { toast('Balances refreshed'); await refetch() }
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: accountKeys.all(userId) }),
+      qc.invalidateQueries({ queryKey: txKeys.year(userId) }),
+      qc.invalidateQueries({ queryKey: txKeys.history(userId) }),
+    ])
+    toast('Balances refreshed')
   }
 
   // Donut uses computed balances (positive balances only — skip debt accounts)

@@ -17,10 +17,18 @@ const sb = createClient(
 );
 
 Deno.serve(async (req) => {
-  // Auth check: accept service key or internal scheduler
-  const auth = req.headers.get('Authorization') || '';
-  if (!auth.includes(Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)) {
-    return new Response('Unauthorized', { status: 401 });
+  const authHeader = req.headers.get('Authorization') || '';
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+  // Accept service role key (cron/scheduler) OR a valid user JWT (client invoke)
+  if (!authHeader.includes(serviceKey)) {
+    const userSb = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { global: { headers: { Authorization: authHeader } } },
+    );
+    const { data: { user }, error } = await userSb.auth.getUser();
+    if (error || !user) return new Response('Unauthorized', { status: 401 });
   }
 
   const today = new Date().toISOString().split('T')[0];

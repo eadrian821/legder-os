@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { ArrowLeftRight, Pencil } from 'lucide-react'
 import type { Transaction, Account } from '@/types/ledger'
 import { AXIS_COLORS } from '@/constants/axes'
@@ -16,11 +15,15 @@ const AXIS_LETTER: Record<string, string> = {
 }
 
 export function TxRow({ tx, accounts, masked = false, onEdit }: TxRowProps) {
-  const [hovered, setHovered] = useState(false)
   const isTransfer = !!tx.counter_account_id
-  const account = accounts.find((a) => a.id === tx.account_id)
+  const isClickable = !!onEdit
+  const account  = accounts.find((a) => a.id === tx.account_id)
   const axisColor = tx.axis ? AXIS_COLORS[tx.axis] : 'var(--ink-3)'
-  const amtColor  = isTransfer ? 'var(--ink-3)' : tx.direction === 'in' ? 'var(--invest)' : axisColor
+  const amtColor  = isTransfer
+    ? 'var(--ink-3)'
+    : tx.direction === 'in'
+      ? 'var(--invest)'
+      : axisColor
 
   const time = new Date(tx.occurred_at).toLocaleTimeString('en-US', {
     hour: '2-digit', minute: '2-digit', hour12: false,
@@ -28,13 +31,12 @@ export function TxRow({ tx, accounts, masked = false, onEdit }: TxRowProps) {
 
   return (
     <div
-      className="flex items-center gap-3 px-4 py-3 border-b border-line last:border-0 cursor-pointer transition-all duration-100 relative"
-      style={{ background: hovered ? 'var(--bg-2)' : 'transparent' }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      className={`group flex items-center gap-3 px-4 py-3 border-b border-[var(--line)] last:border-0 transition-colors duration-100 ${
+        isClickable ? 'cursor-pointer hover:bg-[var(--bg-2)] active:bg-[var(--bg-3)]' : ''
+      }`}
       onClick={() => onEdit?.(tx)}
     >
-      {/* Axis circle icon */}
+      {/* Axis / transfer icon */}
       {isTransfer ? (
         <div
           className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
@@ -46,9 +48,9 @@ export function TxRow({ tx, accounts, masked = false, onEdit }: TxRowProps) {
         <div
           className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 font-mono text-xs font-bold"
           style={{
-            background: `${axisColor}18`,
+            background: `${axisColor}15`,
             color: axisColor,
-            border: `1px solid ${axisColor}30`,
+            border: `1px solid ${axisColor}28`,
           }}
         >
           {tx.axis ? AXIS_LETTER[tx.axis] : '?'}
@@ -60,7 +62,7 @@ export function TxRow({ tx, accounts, masked = false, onEdit }: TxRowProps) {
         <div className="text-sm font-medium text-ink truncate leading-tight">
           {tx.description || (isTransfer ? 'Transfer' : '—')}
         </div>
-        <div className="flex items-center gap-1.5 mt-0.5">
+        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
           {account && (
             <span className="text-[10px] text-ink-4">{account.name}</span>
           )}
@@ -74,23 +76,24 @@ export function TxRow({ tx, accounts, masked = false, onEdit }: TxRowProps) {
         </div>
       </div>
 
-      {/* Amount + time */}
+      {/* Amount + time + edit hint */}
       <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
         <span
-          className="font-mono text-sm font-semibold"
+          className="font-mono text-sm font-semibold tabular-nums"
           style={{ color: masked ? 'var(--ink-4)' : amtColor }}
         >
           {masked ? '••••' : `${tx.direction === 'in' ? '+' : '−'}${fmtX(tx.amount)}`}
         </span>
-        <span className="text-[10px] text-ink-4 font-mono">{time}</span>
-      </div>
-
-      {/* Edit pencil on hover */}
-      {hovered && onEdit && (
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-3 opacity-60">
-          <Pencil size={12} />
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-ink-4 font-mono">{time}</span>
+          {isClickable && (
+            <Pencil
+              size={10}
+              className="text-ink-4 opacity-0 group-hover:opacity-60 transition-opacity"
+            />
+          )}
         </div>
-      )}
+      </div>
     </div>
   )
 }

@@ -113,15 +113,24 @@ export function AuditView({ userId }: AuditViewProps) {
 
   return (
     <div className="pb-20">
-      {/* 3 sub-tabs */}
-      <div className="px-4 pt-4 flex gap-1 mb-3">
-        {(['month', 'quarter', 'year'] as const).map((m) => (
-          <button key={m}
-            className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors ${auditMode === m ? 'bg-bg-3 text-ink' : 'text-ink-3 hover:text-ink-2'}`}
-            onClick={() => setAuditMode(m)}>
-            {m === 'month' ? 'Monthly' : m === 'quarter' ? 'Quarterly' : 'Annual'}
-          </button>
-        ))}
+      {/* Header row: mode tabs + Log button */}
+      <div className="px-4 pt-4 flex gap-2 mb-3">
+        <div className="flex flex-1 gap-1">
+          {(['month', 'quarter', 'year'] as const).map((m) => (
+            <button key={m}
+              className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors ${auditMode === m ? 'bg-bg-3 text-ink' : 'text-ink-3 hover:text-ink-2'}`}
+              onClick={() => setAuditMode(m)}>
+              {m === 'month' ? 'Monthly' : m === 'quarter' ? 'Quarterly' : 'Annual'}
+            </button>
+          ))}
+        </div>
+        <button
+          className="px-3 py-1.5 rounded-md text-xs font-semibold transition-colors"
+          style={{ background: 'rgba(0,230,118,0.1)', color: 'var(--accent)', border: '1px solid rgba(0,230,118,0.25)' }}
+          onClick={() => { setEditTx(undefined); setLogOpen(true) }}
+        >
+          + Log
+        </button>
       </div>
 
       {/* Period navigation */}
@@ -217,14 +226,21 @@ export function AuditView({ userId }: AuditViewProps) {
         <div className="px-4 py-8 text-center text-sm text-ink-4">No transactions this period</div>
       ) : (
         groupedByDate.map(([date, txs]) => {
-          const daily = txs.filter((t) => t.direction === 'out' && !t.counter_account_id).reduce((s, t) => s + t.amount, 0)
+          const dayIn  = txs.filter((t) => t.direction === 'in'  && !t.counter_account_id).reduce((s, t) => s + t.amount, 0)
+          const dayOut = txs.filter((t) => t.direction === 'out' && !t.counter_account_id).reduce((s, t) => s + t.amount, 0)
+          const dayNet = dayIn - dayOut
           return (
-            <div key={date} className="mb-2">
-              <div className="px-4 py-1 flex items-center justify-between border-t border-line">
-                <span className="caps text-ink-4">
+            <div key={date} className="mb-1">
+              <div className="px-4 py-1.5 flex items-center justify-between border-t border-line">
+                <span className="caps text-[9px] text-ink-4">
                   {new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
                 </span>
-                <span className="font-mono text-xs text-ink-3">{masked ? '••••' : `-${daily.toLocaleString()}`}</span>
+                <span
+                  className="font-mono text-[10px]"
+                  style={{ color: dayNet >= 0 ? 'var(--invest)' : 'var(--leak)' }}
+                >
+                  {masked ? '••••' : (dayNet >= 0 ? `+${dayNet.toLocaleString()}` : `−${Math.abs(dayNet).toLocaleString()}`)}
+                </span>
               </div>
               {txs.map((t) => (
                 <TxRow

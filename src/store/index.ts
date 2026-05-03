@@ -21,4 +21,3 @@ export const useUIStore  = () => useStore((s) => ({
   setAuditMode: s.setAuditMode, setAuditOffset: s.setAuditOffset,
   setWeekOffset: s.setWeekOffset, setQueueCount: s.setQueueCount, setOnline: s.setOnline,
 }))
-export const useMetrics  = () => useStore((s) => s.metrics)

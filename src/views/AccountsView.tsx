@@ -5,11 +5,10 @@ import { RefreshCw } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAccounts, useUpsertAccount, useDeleteAccount, accountKeys } from '@/hooks/useAccounts'
 import { useTransactions, txKeys } from '@/hooks/useTransactions'
-import { useComputedMetrics } from '@/hooks/useMetrics'
 import { useUIStore } from '@/store'
 import { Sheet } from '@/components/ui/Sheet'
 import { AccountForm } from '@/components/forms/AccountForm'
-import { ACCOUNT_KIND_LABELS } from '@/constants/accounts'
+import { ACCOUNT_KIND_LABELS, isLiquidKind, isInvestmentKind } from '@/constants/accounts'
 import { fmtX } from '@/lib/utils'
 import { useToast } from '@/components/ui/Toast'
 import type { Account } from '@/types/ledger'
@@ -92,9 +91,7 @@ function AccountCard({
 export function AccountsView({ userId }: AccountsViewProps) {
   const { masked } = useUIStore()
   const { data: accounts = [] } = useAccounts(userId)
-  // allTx = full history; React Query deduplicates with useComputedMetrics below
   const { allTx } = useTransactions(userId)
-  const metrics = useComputedMetrics(userId)
   const upsert = useUpsertAccount(userId)
   const del = useDeleteAccount(userId)
   const { toast } = useToast()
@@ -114,6 +111,11 @@ export function AccountsView({ userId }: AccountsViewProps) {
     }
     return map
   }, [accounts, allTx])
+
+  // NW hero values derived from the same accountBalances map the cards use
+  const nw       = useMemo(() => Object.values(accountBalances).reduce((s, v) => s + v, 0), [accountBalances])
+  const liqBal   = useMemo(() => accounts.filter((a) => isLiquidKind(a.kind)).reduce((s, a) => s + (accountBalances[a.id] ?? 0), 0), [accounts, accountBalances])
+  const investBal = useMemo(() => accounts.filter((a) => isInvestmentKind(a.kind)).reduce((s, a) => s + (accountBalances[a.id] ?? 0), 0), [accounts, accountBalances])
 
   const refreshSnaps = async () => {
     await Promise.all([
@@ -146,16 +148,16 @@ export function AccountsView({ userId }: AccountsViewProps) {
           <div>
             <div className="caps text-ink-4 mb-1">Net worth</div>
             <div className="font-mono text-2xl font-bold text-ink">
-              {masked ? '••••••' : `KES ${fmtX(metrics.nw)}`}
+              {masked ? '••••••' : `KES ${fmtX(nw)}`}
             </div>
             <div className="flex gap-4 mt-2 text-[10px] font-mono">
               <span>
                 <span className="text-ink-4">Liquid </span>
-                <span className="text-invest">{masked ? '••••' : fmtX(metrics.liqBal)}</span>
+                <span className="text-invest">{masked ? '••••' : fmtX(liqBal)}</span>
               </span>
               <span>
                 <span className="text-ink-4">Invest </span>
-                <span className="text-protect">{masked ? '••••' : fmtX(metrics.investBal)}</span>
+                <span className="text-protect">{masked ? '••••' : fmtX(investBal)}</span>
               </span>
             </div>
           </div>

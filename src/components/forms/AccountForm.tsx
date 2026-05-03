@@ -35,7 +35,7 @@ export function AccountForm({ userId, editAccount, onSubmit, onClose }: AccountF
       })
       onClose()
     } catch (err) {
-      toast(String(err))
+      toast((err as Error)?.message ?? 'Failed to save account')
     } finally {
       setLoading(false)
     }

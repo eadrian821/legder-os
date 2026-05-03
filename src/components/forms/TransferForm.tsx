@@ -63,7 +63,7 @@ export function TransferForm({ accounts, userId, onSubmit, onClose }: TransferFo
       await onSubmit([outLeg, inLeg], feeTx)
       onClose()
     } catch (err) {
-      toast(String(err))
+      toast((err as Error)?.message ?? 'Failed to save transfer')
     } finally {
       setLoading(false)
     }

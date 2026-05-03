@@ -36,7 +36,7 @@ export function GoalForm({ userId, editGoal, onSubmit, onClose }: GoalFormProps)
       })
       onClose()
     } catch (err) {
-      toast(String(err))
+      toast((err as Error)?.message ?? 'Failed to save goal')
     } finally {
       setLoading(false)
     }

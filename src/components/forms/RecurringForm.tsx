@@ -47,7 +47,7 @@ export function RecurringForm({ accounts, categories: _categories, userId, editR
       })
       onClose()
     } catch (err) {
-      toast(String(err))
+      toast((err as Error)?.message ?? 'Failed to save recurring')
     } finally {
       setLoading(false)
     }

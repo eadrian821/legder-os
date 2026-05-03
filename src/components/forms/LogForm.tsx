@@ -54,7 +54,7 @@ export function LogForm({ accounts, categories, userId, editTx, onSubmit, onDele
       })
       onClose()
     } catch (err) {
-      toast(String(err))
+      toast((err as Error)?.message ?? 'Failed to save transaction')
     } finally {
       setLoading(false)
     }

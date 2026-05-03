@@ -37,7 +37,7 @@ export function BudgetForm({ categories, userId, editBudget, onSubmit, onClose }
       })
       onClose()
     } catch (err) {
-      toast(String(err))
+      toast((err as Error)?.message ?? 'Failed to save budget')
     } finally {
       setLoading(false)
     }

@@ -15,7 +15,7 @@ export function AuthView() {
       await sendMagicLink(email)
       setSent(true)
     } catch (err) {
-      toast(String(err))
+      toast((err as Error)?.message ?? 'Failed to send magic link')
     } finally {
       setLoading(false)
     }

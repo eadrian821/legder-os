@@ -44,6 +44,7 @@ export function TodayView({ userId }: TodayViewProps) {
   const [transferOpen, setTransferOpen]   = useState(false)
   const [editTx, setEditTx]               = useState<Transaction | undefined>()
   const [editTransferLegs, setEditTransferLegs] = useState<[Transaction, Transaction] | undefined>()
+  const [editTransferFee,  setEditTransferFee]  = useState<Transaction | undefined>()
   const [pinOpen, setPinOpen]             = useState(false)
   const [txFilter, setTxFilter]           = useState<TxFilter>('all')
 
@@ -94,7 +95,18 @@ export function TodayView({ userId }: TodayViewProps) {
       (tx) => tx.account_id === clickedTx.counter_account_id && tx.counter_account_id === clickedTx.account_id
     )
     if (!partner) return
+    const outLeg = clickedTx.direction === 'out' ? clickedTx : partner
+    const feeTx = yearTx.find(
+      (tx) =>
+        tx.account_id === outLeg.account_id &&
+        tx.occurred_at === outLeg.occurred_at &&
+        tx.direction === 'out' &&
+        tx.axis === 'LEAK' &&
+        tx.counter_account_id === null &&
+        tx.description?.startsWith('Transfer fee (')
+    )
     setEditTransferLegs(clickedTx.direction === 'out' ? [clickedTx, partner] : [partner, clickedTx])
+    setEditTransferFee(feeTx)
     setTransferOpen(true)
   }
 
@@ -300,18 +312,20 @@ export function TodayView({ userId }: TodayViewProps) {
 
       <Sheet
         open={transferOpen}
-        onClose={() => { setTransferOpen(false); setEditTransferLegs(undefined) }}
+        onClose={() => { setTransferOpen(false); setEditTransferLegs(undefined); setEditTransferFee(undefined) }}
         title={editTransferLegs ? 'Edit transfer' : 'Transfer'}
       >
         <TransferForm
           accounts={accounts} userId={userId}
           editLegs={editTransferLegs}
+          existingFee={editTransferFee}
           onSubmit={handleTransferSubmit}
           onDelete={editTransferLegs ? async () => {
             await deleteTx.mutateAsync(editTransferLegs[0].id)
             await deleteTx.mutateAsync(editTransferLegs[1].id)
+            if (editTransferFee) await deleteTx.mutateAsync(editTransferFee.id)
           } : undefined}
-          onClose={() => { setTransferOpen(false); setEditTransferLegs(undefined) }}
+          onClose={() => { setTransferOpen(false); setEditTransferLegs(undefined); setEditTransferFee(undefined) }}
         />
       </Sheet>
 

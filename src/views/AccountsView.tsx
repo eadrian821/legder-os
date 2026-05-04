@@ -123,8 +123,9 @@ export function AccountsView({ userId }: AccountsViewProps) {
   const [editTx, setEditTx] = useState<Transaction | undefined>()
 
   // Transfer edit form state (opened from detail sheet)
-  const [transferOpen, setTransferOpen]       = useState(false)
+  const [transferOpen, setTransferOpen]         = useState(false)
   const [editTransferLegs, setEditTransferLegs] = useState<[Transaction, Transaction] | undefined>()
+  const [editTransferFee,  setEditTransferFee]  = useState<Transaction | undefined>()
 
   // Compute each account's running balance
   const accountBalances = useMemo(() => {
@@ -381,7 +382,7 @@ export function AccountsView({ userId }: AccountsViewProps) {
         onEditTx={(tx) => { setEditTx(tx); setLogOpen(true) }}
         onDeleteTx={async (id) => { await deleteTx.mutateAsync(id) }}
         onInsertTx={async (tx) => { await insertTx.mutateAsync(tx) }}
-        onEditTransfer={(legs) => { setEditTransferLegs(legs); setTransferOpen(true) }}
+        onEditTransfer={(legs, feeTx) => { setEditTransferLegs(legs); setEditTransferFee(feeTx); setTransferOpen(true) }}
         onEditAccount={() => {
           setEditAcc(detailAcc)
           setDetailOpen(false)
@@ -423,13 +424,14 @@ export function AccountsView({ userId }: AccountsViewProps) {
       {/* Transfer edit form — opened from detail sheet */}
       <Sheet
         open={transferOpen}
-        onClose={() => { setTransferOpen(false); setEditTransferLegs(undefined) }}
+        onClose={() => { setTransferOpen(false); setEditTransferLegs(undefined); setEditTransferFee(undefined) }}
         title={editTransferLegs ? 'Edit transfer' : 'New transfer'}
       >
         <TransferForm
           accounts={accounts}
           userId={userId}
           editLegs={editTransferLegs}
+          existingFee={editTransferFee}
           onSubmit={async (legs, fee) => {
             await insertTx.mutateAsync(legs[0])
             await insertTx.mutateAsync(legs[1])
@@ -438,8 +440,9 @@ export function AccountsView({ userId }: AccountsViewProps) {
           onDelete={editTransferLegs ? async () => {
             await deleteTx.mutateAsync(editTransferLegs[0].id)
             await deleteTx.mutateAsync(editTransferLegs[1].id)
+            if (editTransferFee) await deleteTx.mutateAsync(editTransferFee.id)
           } : undefined}
-          onClose={() => { setTransferOpen(false); setEditTransferLegs(undefined) }}
+          onClose={() => { setTransferOpen(false); setEditTransferLegs(undefined); setEditTransferFee(undefined) }}
         />
       </Sheet>
     </div>

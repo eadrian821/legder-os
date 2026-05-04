@@ -57,9 +57,31 @@ export function AuditView({ userId }: AuditViewProps) {
   const insertTx = useInsertTransaction(userId)
   const deleteTx = useDeleteTransaction(userId)
 
-  const [logOpen, setLogOpen]       = useState(false)
+  const [logOpen, setLogOpen]           = useState(false)
   const [transferOpen, setTransferOpen] = useState(false)
-  const [editTx, setEditTx]         = useState<Transaction | undefined>()
+  const [editTx, setEditTx]             = useState<Transaction | undefined>()
+  const [editTransferLegs, setEditTransferLegs] = useState<[Transaction, Transaction] | undefined>()
+  const [editTransferFee,  setEditTransferFee]  = useState<Transaction | undefined>()
+
+  const handleTransferEdit = (clickedTx: Transaction) => {
+    const partner = allTx.find(
+      (tx) => tx.account_id === clickedTx.counter_account_id && tx.counter_account_id === clickedTx.account_id
+    )
+    if (!partner) return
+    const outLeg = clickedTx.direction === 'out' ? clickedTx : partner
+    const feeTx = allTx.find(
+      (tx) =>
+        tx.account_id === outLeg.account_id &&
+        tx.occurred_at === outLeg.occurred_at &&
+        tx.direction === 'out' &&
+        tx.axis === 'LEAK' &&
+        tx.counter_account_id === null &&
+        tx.description?.startsWith('Transfer fee (')
+    )
+    setEditTransferLegs(clickedTx.direction === 'out' ? [clickedTx, partner] : [partner, clickedTx])
+    setEditTransferFee(feeTx)
+    setTransferOpen(true)
+  }
 
   const currentPeriod = getPeriod(auditMode, auditOffset)
   const histCount = auditMode === 'month' ? 12 : auditMode === 'quarter' ? 8 : 5
@@ -245,7 +267,9 @@ export function AuditView({ userId }: AuditViewProps) {
               {txs.map((t, i) => (
                 <TxRow
                   key={t.id} tx={t} accounts={accounts} masked={masked} index={i}
-                  onEdit={t.counter_account_id ? undefined : (tx) => { setEditTx(tx); setLogOpen(true) }}
+                  onEdit={t.counter_account_id
+                    ? handleTransferEdit
+                    : (tx) => { setEditTx(tx); setLogOpen(true) }}
                 />
               ))}
             </div>
@@ -263,15 +287,26 @@ export function AuditView({ userId }: AuditViewProps) {
         />
       </Sheet>
 
-      <Sheet open={transferOpen} onClose={() => setTransferOpen(false)} title="Transfer">
+      <Sheet
+        open={transferOpen}
+        onClose={() => { setTransferOpen(false); setEditTransferLegs(undefined); setEditTransferFee(undefined) }}
+        title={editTransferLegs ? 'Edit transfer' : 'Transfer'}
+      >
         <TransferForm
           accounts={accounts} userId={userId}
+          editLegs={editTransferLegs}
+          existingFee={editTransferFee}
           onSubmit={async (legs, fee) => {
             await insertTx.mutateAsync(legs[0])
             await insertTx.mutateAsync(legs[1])
             if (fee) await insertTx.mutateAsync(fee)
           }}
-          onClose={() => setTransferOpen(false)}
+          onDelete={editTransferLegs ? async () => {
+            await deleteTx.mutateAsync(editTransferLegs[0].id)
+            await deleteTx.mutateAsync(editTransferLegs[1].id)
+            if (editTransferFee) await deleteTx.mutateAsync(editTransferFee.id)
+          } : undefined}
+          onClose={() => { setTransferOpen(false); setEditTransferLegs(undefined); setEditTransferFee(undefined) }}
         />
       </Sheet>
     </div>

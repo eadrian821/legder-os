@@ -7,11 +7,16 @@ import {
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useComputedMetrics } from '@/hooks/useMetrics'
 import { useAccounts } from '@/hooks/useAccounts'
-import { useTransactions } from '@/hooks/useTransactions'
+import { useTransactions, useInsertTransaction, useDeleteTransaction } from '@/hooks/useTransactions'
+import { useCategories } from '@/hooks/useCategories'
 import { useUIStore } from '@/store'
 import { TxRow } from '@/components/ui/TxRow'
 import { AxisBar } from '@/components/ui/AxisBar'
+import { Sheet } from '@/components/ui/Sheet'
+import { LogForm } from '@/components/forms/LogForm'
+import { TransferForm } from '@/components/forms/TransferForm'
 import { fmt, weekStart, addDays, dayLabel, iso } from '@/lib/utils'
+import type { Transaction } from '@/types/ledger'
 
 interface WeekViewProps { userId: string }
 
@@ -53,10 +58,39 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
 export function WeekView({ userId }: WeekViewProps) {
   const { masked, weekOffset, setWeekOffset } = useUIStore()
   const { data: accounts = [] } = useAccounts(userId)
+  const { data: categories = [] } = useCategories(userId)
   const { yearTx, allTx } = useTransactions(userId)
+  const insertTx = useInsertTransaction(userId)
+  const deleteTx = useDeleteTransaction(userId)
   const metrics = useComputedMetrics(userId)
 
-  const [selectedDay, setSelectedDay] = useState<number | null>(null)
+  const [selectedDay, setSelectedDay]           = useState<number | null>(null)
+  const [logOpen, setLogOpen]                   = useState(false)
+  const [transferOpen, setTransferOpen]         = useState(false)
+  const [editTx, setEditTx]                     = useState<Transaction | undefined>()
+  const [editTransferLegs, setEditTransferLegs] = useState<[Transaction, Transaction] | undefined>()
+  const [editTransferFee,  setEditTransferFee]  = useState<Transaction | undefined>()
+
+  const handleTransferEdit = (clickedTx: Transaction) => {
+    const source = weekOffset < 0 ? allTx : yearTx
+    const partner = source.find(
+      (tx) => tx.account_id === clickedTx.counter_account_id && tx.counter_account_id === clickedTx.account_id
+    )
+    if (!partner) return
+    const outLeg = clickedTx.direction === 'out' ? clickedTx : partner
+    const feeTx = source.find(
+      (tx) =>
+        tx.account_id === outLeg.account_id &&
+        tx.occurred_at === outLeg.occurred_at &&
+        tx.direction === 'out' &&
+        tx.axis === 'LEAK' &&
+        tx.counter_account_id === null &&
+        tx.description?.startsWith('Transfer fee (')
+    )
+    setEditTransferLegs(clickedTx.direction === 'out' ? [clickedTx, partner] : [partner, clickedTx])
+    setEditTransferFee(feeTx)
+    setTransferOpen(true)
+  }
 
   const ws = weekStart(weekOffset)
   const we = addDays(ws, 6)
@@ -236,9 +270,49 @@ export function WeekView({ userId }: WeekViewProps) {
         {displayTx.length === 0 ? (
           <div className="px-4 py-10 text-center text-sm text-ink-4">No transactions</div>
         ) : (
-          displayTx.map((t, i) => <TxRow key={t.id} tx={t} accounts={accounts} masked={masked} index={i} />)
+          displayTx.map((t, i) => (
+            <TxRow
+              key={t.id} tx={t} accounts={accounts} masked={masked} index={i}
+              onEdit={t.counter_account_id
+                ? handleTransferEdit
+                : (tx) => { setEditTx(tx); setLogOpen(true) }}
+            />
+          ))
         )}
       </div>
+
+      <Sheet open={logOpen} onClose={() => { setLogOpen(false); setEditTx(undefined) }}
+        title={editTx ? 'Edit transaction' : 'Log transaction'}>
+        <LogForm
+          accounts={accounts} categories={categories} userId={userId} editTx={editTx}
+          onSubmit={async (tx) => { await insertTx.mutateAsync(tx) }}
+          onDelete={async (id) => { await deleteTx.mutateAsync(id) }}
+          onClose={() => { setLogOpen(false); setEditTx(undefined) }}
+        />
+      </Sheet>
+
+      <Sheet
+        open={transferOpen}
+        onClose={() => { setTransferOpen(false); setEditTransferLegs(undefined); setEditTransferFee(undefined) }}
+        title={editTransferLegs ? 'Edit transfer' : 'Transfer'}
+      >
+        <TransferForm
+          accounts={accounts} userId={userId}
+          editLegs={editTransferLegs}
+          existingFee={editTransferFee}
+          onSubmit={async (legs, fee) => {
+            await insertTx.mutateAsync(legs[0])
+            await insertTx.mutateAsync(legs[1])
+            if (fee) await insertTx.mutateAsync(fee)
+          }}
+          onDelete={editTransferLegs ? async () => {
+            await deleteTx.mutateAsync(editTransferLegs[0].id)
+            await deleteTx.mutateAsync(editTransferLegs[1].id)
+            if (editTransferFee) await deleteTx.mutateAsync(editTransferFee.id)
+          } : undefined}
+          onClose={() => { setTransferOpen(false); setEditTransferLegs(undefined); setEditTransferFee(undefined) }}
+        />
+      </Sheet>
     </div>
   )
 }

@@ -37,7 +37,7 @@ interface Props {
   onDeleteTx?: (id: string) => Promise<void>
   onInsertTx?: (tx: Omit<Transaction, 'created_at'>) => Promise<void>
   onEditAccount: () => void
-  onEditTransfer?: (legs: [Transaction, Transaction]) => void
+  onEditTransfer?: (legs: [Transaction, Transaction], feeTx?: Transaction) => void
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -283,7 +283,18 @@ export function AccountDetailSheet({
       const partner = allTx.find(
         (tx) => tx.account_id === t.counter_account_id && tx.counter_account_id === t.account_id
       )
-      if (partner) onEditTransfer(t.direction === 'out' ? [t, partner] : [partner, t])
+      if (!partner) return
+      const outLeg = t.direction === 'out' ? t : partner
+      const feeTx = allTx.find(
+        (tx) =>
+          tx.account_id === outLeg.account_id &&
+          tx.occurred_at === outLeg.occurred_at &&
+          tx.direction === 'out' &&
+          tx.axis === 'LEAK' &&
+          tx.counter_account_id === null &&
+          tx.description?.startsWith('Transfer fee (')
+      )
+      onEditTransfer(t.direction === 'out' ? [t, partner] : [partner, t], feeTx)
     } else {
       onEditTx(t)
     }

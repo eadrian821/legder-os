@@ -10,6 +10,7 @@ import { useUIStore } from '@/store'
 import { Sheet } from '@/components/ui/Sheet'
 import { AccountForm } from '@/components/forms/AccountForm'
 import { LogForm } from '@/components/forms/LogForm'
+import { TransferForm } from '@/components/forms/TransferForm'
 import { AccountDetailSheet } from '@/components/ui/AccountDetailSheet'
 import { ACCOUNT_KIND_LABELS, isLiquidKind, isInvestmentKind } from '@/constants/accounts'
 import { fmtX } from '@/lib/utils'
@@ -120,6 +121,10 @@ export function AccountsView({ userId }: AccountsViewProps) {
   // Tx log form state (opened from detail sheet)
   const [logOpen, setLogOpen] = useState(false)
   const [editTx, setEditTx] = useState<Transaction | undefined>()
+
+  // Transfer edit form state (opened from detail sheet)
+  const [transferOpen, setTransferOpen]       = useState(false)
+  const [editTransferLegs, setEditTransferLegs] = useState<[Transaction, Transaction] | undefined>()
 
   // Compute each account's running balance
   const accountBalances = useMemo(() => {
@@ -376,6 +381,7 @@ export function AccountsView({ userId }: AccountsViewProps) {
         onEditTx={(tx) => { setEditTx(tx); setLogOpen(true) }}
         onDeleteTx={async (id) => { await deleteTx.mutateAsync(id) }}
         onInsertTx={async (tx) => { await insertTx.mutateAsync(tx) }}
+        onEditTransfer={(legs) => { setEditTransferLegs(legs); setTransferOpen(true) }}
         onEditAccount={() => {
           setEditAcc(detailAcc)
           setDetailOpen(false)
@@ -411,6 +417,29 @@ export function AccountsView({ userId }: AccountsViewProps) {
           onSubmit={async (tx) => { await insertTx.mutateAsync(tx) }}
           onDelete={async (id) => { await deleteTx.mutateAsync(id) }}
           onClose={() => { setLogOpen(false); setEditTx(undefined) }}
+        />
+      </Sheet>
+
+      {/* Transfer edit form — opened from detail sheet */}
+      <Sheet
+        open={transferOpen}
+        onClose={() => { setTransferOpen(false); setEditTransferLegs(undefined) }}
+        title={editTransferLegs ? 'Edit transfer' : 'New transfer'}
+      >
+        <TransferForm
+          accounts={accounts}
+          userId={userId}
+          editLegs={editTransferLegs}
+          onSubmit={async (legs, fee) => {
+            await insertTx.mutateAsync(legs[0])
+            await insertTx.mutateAsync(legs[1])
+            if (fee) await insertTx.mutateAsync(fee)
+          }}
+          onDelete={editTransferLegs ? async () => {
+            await deleteTx.mutateAsync(editTransferLegs[0].id)
+            await deleteTx.mutateAsync(editTransferLegs[1].id)
+          } : undefined}
+          onClose={() => { setTransferOpen(false); setEditTransferLegs(undefined) }}
         />
       </Sheet>
     </div>

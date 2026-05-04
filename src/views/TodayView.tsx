@@ -40,11 +40,12 @@ export function TodayView({ userId }: TodayViewProps) {
   const insertTx = useInsertTransaction(userId)
   const deleteTx = useDeleteTransaction(userId)
 
-  const [logOpen, setLogOpen]       = useState(false)
-  const [transferOpen, setTransferOpen] = useState(false)
-  const [editTx, setEditTx]         = useState<Transaction | undefined>()
-  const [pinOpen, setPinOpen]       = useState(false)
-  const [txFilter, setTxFilter]     = useState<TxFilter>('all')
+  const [logOpen, setLogOpen]             = useState(false)
+  const [transferOpen, setTransferOpen]   = useState(false)
+  const [editTx, setEditTx]               = useState<Transaction | undefined>()
+  const [editTransferLegs, setEditTransferLegs] = useState<[Transaction, Transaction] | undefined>()
+  const [pinOpen, setPinOpen]             = useState(false)
+  const [txFilter, setTxFilter]           = useState<TxFilter>('all')
 
   const today    = todayLocal()
   const tomorrow = addDays(today, 1)
@@ -86,6 +87,15 @@ export function TodayView({ userId }: TodayViewProps) {
     await insertTx.mutateAsync(legs[0])
     await insertTx.mutateAsync(legs[1])
     if (fee) await insertTx.mutateAsync(fee)
+  }
+
+  const handleTransferEdit = (clickedTx: Transaction) => {
+    const partner = yearTx.find(
+      (tx) => tx.account_id === clickedTx.counter_account_id && tx.counter_account_id === clickedTx.account_id
+    )
+    if (!partner) return
+    setEditTransferLegs(clickedTx.direction === 'out' ? [clickedTx, partner] : [partner, clickedTx])
+    setTransferOpen(true)
   }
 
   if (isLoading || txLoading) {
@@ -220,7 +230,7 @@ export function TodayView({ userId }: TodayViewProps) {
           <button
             className="text-xs px-3 py-1.5 rounded-md border text-protect hover:bg-protect/10 transition-colors"
             style={{ borderColor: 'rgba(68,136,255,0.3)' }}
-            onClick={() => setTransferOpen(true)}
+            onClick={() => { setEditTransferLegs(undefined); setTransferOpen(true) }}
           >
             Transfer
           </button>
@@ -270,7 +280,10 @@ export function TodayView({ userId }: TodayViewProps) {
         filteredTx.map((t, i) => (
           <TxRow
             key={t.id} tx={t} accounts={accounts} masked={masked} index={i}
-            onEdit={t.counter_account_id ? undefined : (tx) => { setEditTx(tx); setLogOpen(true) }}
+            onEdit={t.counter_account_id
+              ? handleTransferEdit
+              : (tx) => { setEditTx(tx); setLogOpen(true) }
+            }
           />
         ))
       )}
@@ -285,11 +298,20 @@ export function TodayView({ userId }: TodayViewProps) {
         />
       </Sheet>
 
-      <Sheet open={transferOpen} onClose={() => setTransferOpen(false)} title="Transfer">
+      <Sheet
+        open={transferOpen}
+        onClose={() => { setTransferOpen(false); setEditTransferLegs(undefined) }}
+        title={editTransferLegs ? 'Edit transfer' : 'Transfer'}
+      >
         <TransferForm
           accounts={accounts} userId={userId}
+          editLegs={editTransferLegs}
           onSubmit={handleTransferSubmit}
-          onClose={() => setTransferOpen(false)}
+          onDelete={editTransferLegs ? async () => {
+            await deleteTx.mutateAsync(editTransferLegs[0].id)
+            await deleteTx.mutateAsync(editTransferLegs[1].id)
+          } : undefined}
+          onClose={() => { setTransferOpen(false); setEditTransferLegs(undefined) }}
         />
       </Sheet>
 

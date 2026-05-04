@@ -37,6 +37,7 @@ interface Props {
   onDeleteTx?: (id: string) => Promise<void>
   onInsertTx?: (tx: Omit<Transaction, 'created_at'>) => Promise<void>
   onEditAccount: () => void
+  onEditTransfer?: (legs: [Transaction, Transaction]) => void
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -107,12 +108,13 @@ function FlowKpi({
 }
 
 function AnomalyRow({
-  flag, tx, onEdit, onDelete,
+  flag, tx, onEdit, onDelete, onDismiss,
 }: {
   flag: AnomalyFlag
   tx?: Transaction
   onEdit?: (tx: Transaction) => void
   onDelete?: (id: string) => Promise<void>
+  onDismiss?: () => void
 }) {
   const [deleting, setDeleting] = useState(false)
   const c = flag.kind === 'no-axis' ? 'var(--sustain)' : flag.kind === 'large' ? 'var(--leak)' : '#ffaa00'
@@ -121,11 +123,21 @@ function AnomalyRow({
     <motion.div
       initial={{ opacity: 0, x: -8 }}
       animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 8, transition: { duration: 0.15 } }}
       className="py-2"
     >
       <div className="flex items-start gap-2">
         <AlertTriangle size={11} style={{ color: c, flexShrink: 0, marginTop: 2 }} />
         <span className="text-[11px] text-ink-3 leading-tight flex-1">{flag.label}</span>
+        {onDismiss && (
+          <button
+            onClick={onDismiss}
+            className="flex-shrink-0 text-ink-4 hover:text-ink-2 transition-colors p-0.5 rounded"
+            aria-label="Dismiss flag"
+          >
+            <X size={10} />
+          </button>
+        )}
       </div>
       {tx && (
         <div className="flex items-center gap-1.5 mt-1.5 ml-4">
@@ -177,13 +189,14 @@ function ChartTooltip({ active, payload }: { active?: boolean; payload?: Array<{
 
 export function AccountDetailSheet({
   open, onClose, account, allTx, allAccounts, masked, color,
-  onEditTx, onDeleteTx, onInsertTx, onEditAccount,
+  onEditTx, onDeleteTx, onInsertTx, onEditAccount, onEditTransfer,
 }: Props) {
   const [period, setPeriod] = useState<PeriodKey>('1m')
   const [showAnomalies, setShowAnomalies] = useState(true)
   const [reconcileOpen, setReconcileOpen] = useState(false)
   const [reconcileTarget, setReconcileTarget] = useState('')
   const [reconciling, setReconciling] = useState(false)
+  const [dismissedFlags, setDismissedFlags] = useState<Set<string>>(new Set())
 
   const accountId = account?.id
 
@@ -256,6 +269,25 @@ export function AccountDetailSheet({
 
   // Build a map for quick tx lookup by id
   const txById = useMemo(() => new Map(periodTx.map((t) => [t.id, t])), [periodTx])
+
+  // Anomalies minus any the user has dismissed this session
+  const visibleAnomalies = useMemo(
+    () => anomalies.filter((f) => !dismissedFlags.has(`${f.txId}|${f.kind}`)),
+    [anomalies, dismissedFlags]
+  )
+
+  // Unified edit handler — routes to transfer edit or regular tx edit
+  const handleTxRowEdit = (t: Transaction) => {
+    if (t.counter_account_id) {
+      if (!onEditTransfer) return
+      const partner = allTx.find(
+        (tx) => tx.account_id === t.counter_account_id && tx.counter_account_id === t.account_id
+      )
+      if (partner) onEditTransfer(t.direction === 'out' ? [t, partner] : [partner, t])
+    } else {
+      onEditTx(t)
+    }
+  }
 
   // Ledger grouped by date (descending)
   const groupedByDate = useMemo(() => {
@@ -546,7 +578,7 @@ export function AccountDetailSheet({
           )}
 
           {/* ── Anomaly flags ────────────────────────────────────────── */}
-          {anomalies.length > 0 && (
+          {visibleAnomalies.length > 0 && (
             <div className="px-4 mb-4">
               <button
                 className="flex items-center gap-1.5 w-full text-left mb-2"
@@ -554,7 +586,7 @@ export function AccountDetailSheet({
               >
                 <Zap size={10} style={{ color: 'var(--leak)' }} />
                 <span className="caps text-[9px]" style={{ color: 'var(--leak)' }}>
-                  {anomalies.length} flag{anomalies.length !== 1 ? 's' : ''} detected
+                  {visibleAnomalies.length} flag{visibleAnomalies.length !== 1 ? 's' : ''} detected
                 </span>
                 <span className="text-ink-4 text-[9px] ml-auto">{showAnomalies ? '▴' : '▾'}</span>
               </button>
@@ -568,15 +600,20 @@ export function AccountDetailSheet({
                     style={{ background: 'rgba(255,51,85,0.06)', border: '1px solid rgba(255,51,85,0.18)' }}
                   >
                     <div className="px-3 py-1 divide-y divide-[rgba(255,51,85,0.1)]">
-                      {anomalies.map((f, i) => (
-                        <AnomalyRow
-                          key={i}
-                          flag={f}
-                          tx={txById.get(f.txId)}
-                          onEdit={onEditTx}
-                          onDelete={onDeleteTx}
-                        />
-                      ))}
+                      <AnimatePresence>
+                        {visibleAnomalies.map((f) => (
+                          <AnomalyRow
+                            key={`${f.txId}|${f.kind}`}
+                            flag={f}
+                            tx={txById.get(f.txId)}
+                            onEdit={onEditTx}
+                            onDelete={onDeleteTx}
+                            onDismiss={() =>
+                              setDismissedFlags((prev) => new Set([...prev, `${f.txId}|${f.kind}`]))
+                            }
+                          />
+                        ))}
+                      </AnimatePresence>
                     </div>
                   </motion.div>
                 )}
@@ -628,7 +665,7 @@ export function AccountDetailSheet({
                         accounts={allAccounts}
                         masked={masked}
                         index={i}
-                        onEdit={t.counter_account_id ? undefined : (tx) => onEditTx(tx)}
+                        onEdit={(!t.counter_account_id || onEditTransfer) ? handleTxRowEdit : undefined}
                       />
                     </div>
                   ))}
